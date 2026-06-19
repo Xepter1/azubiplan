@@ -12,8 +12,17 @@ Abteilungen, und der Ausbilder stellt sicher, dass alle Pflicht-Lerninhalte
 Ausbildungsbeauftragter.
 
 ## Aktueller Status
-**Planung — es gibt noch keinen Code.** Nächster konkreter Schritt: aus dem Datenmodell
-(ARCHITECTURE.md, Abschnitt 6) das **Prisma-Schema** ableiten.
+**Gerüst steht (Stand 2026-06-19).** Lauffähiges Next.js 16 (TypeScript, App Router,
+Tailwind 4) + shadcn/ui, Prisma 7 auf PostgreSQL (lokal via Docker). Das Datenmodell aus
+Abschnitt 6 ist als `prisma/schema.prisma` umgesetzt, die erste Migration ist angewandt,
+und der Prisma-Client-Singleton (`src/lib/prisma.ts`, mit `@prisma/adapter-pg`) steht.
+
+Lokal starten: `npm run db:up` (DB-Container) und `npm run dev` (App auf http://localhost:3000).
+
+Nächste Schritte: erste sichtbare Funktion **„Azubis"** (anlegen/auflisten), dann
+**Auth.js-Login + Mandanten + Row-Level-Security** (Mandantentrennung), danach
+Beurteilung & Noten. Offene Modellierungs-Fragen stehen als `TODO (klären)` in
+`prisma/schema.prisma`.
 
 ## Entschiedener Stack
 - **Next.js** (TypeScript) — Frontend + API in einem Projekt

@@ -1,0 +1,262 @@
+// AzubiPlan — Prisma-Schema (v0)
+// Abgeleitet aus ARCHITECTURE.md, Abschnitt 6 (Kern-Datenmodell).
+//
+// Grundregeln (siehe ARCHITECTURE.md):
+//  - Jede personenbezogene Tabelle trägt `tenantId` (Mandantentrennung).
+//  - `tenantId` ist überall indiziert (Performance / kein N+1 auf Filterspalte).
+//  - Soft-Delete (`deletedAt`) von Tag 1 für die fachlichen Kernobjekte.
+//
+// WICHTIG: PostgreSQL Row-Level-Security (RLS) wird NICHT von Prisma verwaltet.
+// Die RLS-Policies kommen in einem eigenen, getesteten Schritt als SQL-Migration
+// (Risiko Nr. 2 in der Architektur — ein Isolations-Leck = DSGVO-Vorfall).
+//
+// Mit "TODO (klären)" markierte Stellen sind bewusste v0-Annahmen, die wir
+// gemeinsam bestätigen sollten, bevor sie in echten Code/UI gegossen werden.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  AUSBILDER
+  AZUBI
+  AUSBILDUNGSBEAUFTRAGTER
+}
+
+/// Mandant (Firma). Wurzel der gesamten Datentrennung.
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  apprentices      Apprentice[]
+  departments      Department[]
+  professions      Profession[]
+  learningContents LearningContent[]
+  requiredContents RequiredContent[]
+  taughtContents   TaughtContent[]
+  placements       Placement[]
+  evaluations      Evaluation[]
+  grades           Grade[]
+}
+
+/// Login-fähiger Nutzer mit Rolle. Azubis können (optional) einen User-Account haben.
+model User {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email    String
+  name     String?
+  role     UserRole @default(AZUBI)
+
+  // TODO (klären): Ausbilder/Ausbildungsbeauftragte gehören i.d.R. zu einer Abteilung.
+  departmentId String?     @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Gegenstück zur optionalen Azubi-Verknüpfung (Apprentice.user).
+  apprentice       Apprentice?
+  // Von diesem User erstellte Beurteilungen (z.B. Ausbildungsbeauftragter).
+  givenEvaluations Evaluation[] @relation("EvaluatorUser")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, email]) // E-Mail eindeutig je Mandant
+  @@index([tenantId])
+  @@index([departmentId])
+}
+
+/// Beruf / Ausbildungsgang. Hängt am Ausbildungsrahmenplan (REQUIRED_CONTENT).
+model Profession {
+  id          String @id @default(uuid()) @db.Uuid
+  tenantId    String @db.Uuid
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bezeichnung String
+
+  apprentices      Apprentice[]
+  requiredContents RequiredContent[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+/// Auszubildende:r.
+model Apprentice {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vorname  String
+  nachname String
+  start    DateTime @db.Date
+  ende     DateTime @db.Date
+
+  professionId String?     @db.Uuid
+  profession   Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
+
+  // TODO (klären): Azubi-Login — 1:1-Verknüpfung zu einem User-Account (optional).
+  userId String? @unique @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  placements Placement[]
+  grades     Grade[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+  @@index([professionId])
+}
+
+/// Abteilung, durch die Azubis rotieren. Vermittelt bestimmte Lerninhalte.
+model Department {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  kapazitaet Int? // max. gleichzeitige Azubis (optional)
+
+  taughtContents TaughtContent[]
+  placements     Placement[]
+  users          User[] // Ausbilder / Ausbildungsbeauftragte dieser Abteilung
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+/// Einzelner Lerninhalt (Baustein des Rahmenplans bzw. dessen, was Abteilungen vermitteln).
+model LearningContent {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  titel    String
+
+  requiredFor RequiredContent[]
+  taughtIn    TaughtContent[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+/// Verknüpfung Beruf ↔ Lerninhalt: "dieser Inhalt ist Pflicht für diesen Beruf".
+model RequiredContent {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  professionId      String          @db.Uuid
+  profession        Profession      @relation(fields: [professionId], references: [id], onDelete: Cascade)
+  learningContentId String          @db.Uuid
+  learningContent   LearningContent @relation(fields: [learningContentId], references: [id], onDelete: Cascade)
+
+  @@unique([professionId, learningContentId])
+  @@index([tenantId])
+  @@index([learningContentId])
+}
+
+/// Verknüpfung Abteilung ↔ Lerninhalt: "diese Abteilung vermittelt diesen Inhalt".
+model TaughtContent {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  departmentId      String          @db.Uuid
+  department        Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  learningContentId String          @db.Uuid
+  learningContent   LearningContent @relation(fields: [learningContentId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, learningContentId])
+  @@index([tenantId])
+  @@index([learningContentId])
+}
+
+/// Einsatz: ein Azubi ist von–bis in einer Abteilung (Rotation).
+model Placement {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  apprenticeId String     @db.Uuid
+  apprentice   Apprentice @relation(fields: [apprenticeId], references: [id], onDelete: Cascade)
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  von DateTime @db.Date
+  bis DateTime @db.Date
+
+  // 1:1 — eine Beurteilung je Einsatz (optional, entsteht nach dem Einsatz).
+  evaluation Evaluation?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // TODO (klären): Dürfen sich Einsätze eines Azubis zeitlich überlappen (parallel)
+  // oder sind sie strikt sequentiell? Beeinflusst Validierung & Abdeckungs-Check.
+  @@index([tenantId])
+  @@index([apprenticeId, von])
+  @@index([departmentId, von, bis])
+}
+
+/// Beurteilung eines Azubis durch die Abteilung nach einem Einsatz.
+model Evaluation {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  placementId String    @unique @db.Uuid
+  placement   Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  // TODO (klären): genaues Beurteilungs-Modell (Skala? Kriterien-Katalog? Freitext?).
+  bewertung Int? // Platzhalter, z.B. 1–5
+  kommentar String?
+
+  evaluatorUserId String? @db.Uuid
+  evaluator       User?   @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+/// Note (vom Azubi eingetragen).
+model Grade {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  apprenticeId String     @db.Uuid
+  apprentice   Apprentice @relation(fields: [apprenticeId], references: [id], onDelete: Cascade)
+
+  // TODO (klären): Noten-Modell — Fach-Katalog, Skala (1–6?), Berufsschule vs. Betrieb,
+  // Zeitraum/Schuljahr. Aktuell bewusst minimal.
+  fach  String
+  wert  Decimal  @db.Decimal(3, 1)
+  datum DateTime @db.Date
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+  @@index([apprenticeId])
+}

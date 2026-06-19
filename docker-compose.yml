@@ -1,0 +1,31 @@
+# Lokale Entwicklungs-Umgebung für AzubiPlan.
+# Startet eine PostgreSQL-Datenbank im Container.
+#
+#   docker compose up -d      # DB starten (im Hintergrund)
+#   docker compose down       # DB stoppen
+#   docker compose down -v     # DB stoppen UND Daten löschen (Achtung!)
+#
+# Die App und Prisma verbinden sich vom Host aus über localhost:5432
+# (siehe DATABASE_URL in .env).
+
+services:
+  db:
+    image: postgres:17
+    container_name: azubiplan-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: azubiplan
+      POSTGRES_PASSWORD: azubiplan_local_dev
+      POSTGRES_DB: azubiplan
+    ports:
+      - "5432:5432"
+    volumes:
+      - azubiplan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U azubiplan -d azubiplan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  azubiplan_pgdata:

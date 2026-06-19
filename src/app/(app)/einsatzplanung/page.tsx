@@ -1,98 +1,84 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { prisma } from "@/lib/prisma";
 import { getActiveTenant } from "@/lib/tenant";
-import { rotationStatus } from "@/lib/rotation";
-import { cn } from "@/lib/utils";
+import { Planner } from "./planner";
 
 export const dynamic = "force-dynamic";
 
-const dateFmt = new Intl.DateTimeFormat("de-DE");
-
 export default async function EinsatzplanungPage() {
   const tenant = await getActiveTenant();
-  const now = new Date();
+  const tid = tenant.id;
 
-  const placements = await prisma.placement.findMany({
-    where: { tenantId: tenant.id, deletedAt: null },
-    include: { apprentice: true, department: true },
-    orderBy: { von: "asc" },
-  });
+  const [apprentices, departments, professions, placements] = await Promise.all([
+    prisma.apprentice.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: {
+        id: true,
+        vorname: true,
+        nachname: true,
+        professionId: true,
+        start: true,
+      },
+    }),
+    prisma.department.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        suitableFor: { select: { professionId: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.profession.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: { id: true, bezeichnung: true },
+      orderBy: { bezeichnung: "asc" },
+    }),
+    prisma.placement.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: {
+        id: true,
+        apprenticeId: true,
+        departmentId: true,
+        von: true,
+        bis: true,
+        department: { select: { name: true } },
+      },
+    }),
+  ]);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">
         Einsatzplanung
       </h1>
-      <p className="mb-8 text-sm text-muted-foreground">
-        Rotationen der Auszubildenden durch die Abteilungen
+      <p className="mb-6 text-sm text-muted-foreground">
+        Azubis nach Beruf &amp; Ausbildungsjahr filtern und passende Abteilungen
+        per Drag &amp; Drop einplanen.
       </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Alle Rotationen</CardTitle>
-          <CardDescription>
-            Entwurf — Anlegen/Bearbeiten und der Abdeckungs-Check folgen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {placements.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Noch keine Rotationen vorhanden.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Azubi</TableHead>
-                  <TableHead>Abteilung</TableHead>
-                  <TableHead>Zeitraum</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {placements.map((p) => {
-                  const st = rotationStatus(p.von, p.bis, now);
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">
-                        {p.apprentice.vorname} {p.apprentice.nachname}
-                      </TableCell>
-                      <TableCell>{p.department.name}</TableCell>
-                      <TableCell>
-                        {dateFmt.format(p.von)} – {dateFmt.format(p.bis)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 text-xs font-medium",
-                            st.cls,
-                          )}
-                        >
-                          {st.label}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Planner
+        apprentices={apprentices.map((a) => ({
+          id: a.id,
+          vorname: a.vorname,
+          nachname: a.nachname,
+          professionId: a.professionId,
+          start: a.start.toISOString(),
+        }))}
+        departments={departments.map((dep) => ({
+          id: dep.id,
+          name: dep.name,
+          professionIds: dep.suitableFor.map((s) => s.professionId),
+        }))}
+        professions={professions}
+        placements={placements.map((p) => ({
+          id: p.id,
+          apprenticeId: p.apprenticeId,
+          departmentId: p.departmentId,
+          departmentName: p.department.name,
+          von: p.von.toISOString(),
+          bis: p.bis.toISOString(),
+        }))}
+      />
     </div>
   );
 }

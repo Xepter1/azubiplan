@@ -46,6 +46,7 @@ model Tenant {
   placements       Placement[]
   evaluations      Evaluation[]
   grades           Grade[]
+  departmentProfessions DepartmentProfession[]
 }
 
 /// Login-fähiger Nutzer mit Rolle. Azubis können (optional) einen User-Account haben.
@@ -88,6 +89,8 @@ model Profession {
 
   apprentices      Apprentice[]
   requiredContents RequiredContent[]
+  // Abteilungen, die für diesen Beruf als Einsatzort geeignet sind.
+  suitableDepartments DepartmentProfession[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -135,6 +138,8 @@ model Department {
   taughtContents TaughtContent[]
   placements     Placement[]
   users          User[] // Ausbilder / Ausbildungsbeauftragte dieser Abteilung
+  // Für welche Berufe ist diese Abteilung als Einsatzort geeignet.
+  suitableFor    DepartmentProfession[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -263,4 +268,20 @@ model Grade {
 
   @@index([tenantId])
   @@index([apprenticeId])
+}
+
+/// Eignung: welche Abteilung kommt für welchen Beruf als Einsatzort infrage.
+model DepartmentProfession {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  professionId String     @db.Uuid
+  profession   Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, professionId])
+  @@index([tenantId])
+  @@index([professionId])
 }

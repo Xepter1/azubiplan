@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 
-import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveTenant } from "@/lib/tenant";
 
@@ -31,11 +30,10 @@ export async function createApprentice(formData: FormData) {
     },
   });
 
-  revalidatePath("/azubis");
+  revalidatePath("/auszubildende");
 }
 
 // Soft-Delete: setzt deletedAt, löscht aber nicht physisch (Audit/Wiederherstellung).
-// Der tenantId-Filter stellt sicher, dass nur eigene Datensätze betroffen sind.
 export async function softDeleteApprentice(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
@@ -47,10 +45,5 @@ export async function softDeleteApprentice(formData: FormData) {
     data: { deletedAt: new Date() },
   });
 
-  revalidatePath("/azubis");
-}
-
-// Abmelden und zurück zum Login.
-export async function logout() {
-  await signOut({ redirectTo: "/login" });
+  revalidatePath("/auszubildende");
 }

@@ -17,7 +17,7 @@ export async function login(
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/azubis",
+      redirectTo: "/dashboard",
     });
   } catch (error) {
     if (error instanceof AuthError) {

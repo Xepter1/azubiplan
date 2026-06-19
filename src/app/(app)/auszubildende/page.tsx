@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-import { getActiveTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,14 +16,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createApprentice, logout, softDeleteApprentice } from "./actions";
+import { prisma } from "@/lib/prisma";
+import { getActiveTenant } from "@/lib/tenant";
+import { createApprentice, softDeleteApprentice } from "./actions";
 
-// Immer frische Daten aus der DB (kein statisches Caching dieser Seite).
 export const dynamic = "force-dynamic";
 
 const dateFmt = new Intl.DateTimeFormat("de-DE");
 
-export default async function AzubisPage() {
+export default async function AuszubildendePage() {
   const tenant = await getActiveTenant();
 
   const [apprentices, professions] = await Promise.all([
@@ -41,20 +40,13 @@ export default async function AzubisPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-10">
-      <header className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Azubis</h1>
-          <p className="text-sm text-muted-foreground">
-            Mandant: {tenant.name} · {apprentices.length} aktive Azubis
-          </p>
-        </div>
-        <form action={logout}>
-          <Button type="submit" variant="outline" size="sm">
-            Abmelden
-          </Button>
-        </form>
-      </header>
+    <div className="mx-auto max-w-5xl px-6 py-8">
+      <h1 className="mb-1 text-2xl font-semibold tracking-tight">
+        Auszubildende
+      </h1>
+      <p className="mb-8 text-sm text-muted-foreground">
+        {apprentices.length} aktive Auszubildende
+      </p>
 
       <Card className="mb-8">
         <CardHeader>
@@ -112,7 +104,9 @@ export default async function AzubisPage() {
           {apprentices.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Noch keine Azubis. Lege oben den ersten an — oder führe{" "}
-              <code className="rounded bg-muted px-1 py-0.5">npm run db:seed</code>{" "}
+              <code className="rounded bg-muted px-1 py-0.5">
+                npm run db:seed
+              </code>{" "}
               für Beispieldaten aus.
             </p>
           ) : (
@@ -150,6 +144,6 @@ export default async function AzubisPage() {
           )}
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }

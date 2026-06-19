@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { createPlacement, deletePlacement } from "./actions";
+import { createPlacement, deletePlacement, updatePlacement } from "./actions";
 
 type Apprentice = {
   id: string;
@@ -55,6 +55,14 @@ function isoToKey(iso: string) {
   const dt = new Date(iso);
   return calKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
 }
+function overlapsMonth(p: Placement, m: Date) {
+  const y = m.getFullYear();
+  const mi = m.getMonth();
+  return (
+    isoToKey(p.von) <= calKey(y, mi, lastDayOfMonth(y, mi)) &&
+    isoToKey(p.bis) >= calKey(y, mi, 1)
+  );
+}
 function ausbildungsjahr(startISO: string, now: Date) {
   const s = new Date(startISO);
   let years = now.getFullYear() - s.getUTCFullYear();
@@ -65,6 +73,10 @@ function ausbildungsjahr(startISO: string, now: Date) {
   }
   return Math.max(1, years + 1);
 }
+
+type DragPayload =
+  | { type: "new"; departmentId: string }
+  | { type: "resize"; placementId: string; edge: "start" | "end" };
 
 export function Planner({
   apprentices,
@@ -79,7 +91,6 @@ export function Planner({
 }) {
   const now = useMemo(() => new Date(), []);
 
-  // Default-Beruf: der mit den meisten Azubis.
   const defaultProfession = useMemo(() => {
     const counts = new Map<string, number>();
     for (const a of apprentices) {
@@ -127,20 +138,13 @@ export function Planner({
     [departments, professionId],
   );
 
-  function placementsInCell(apprenticeId: string, m: Date) {
-    const y = m.getFullYear();
-    const mi = m.getMonth();
-    const firstKey = calKey(y, mi, 1);
-    const lastKey = calKey(y, mi, lastDayOfMonth(y, mi));
+  function placementsInMonth(apprenticeId: string, m: Date) {
     return placements.filter(
-      (p) =>
-        p.apprenticeId === apprenticeId &&
-        isoToKey(p.von) <= lastKey &&
-        isoToKey(p.bis) >= firstKey,
+      (p) => p.apprenticeId === apprenticeId && overlapsMonth(p, m),
     );
   }
 
-  function handleDrop(apprenticeId: string, m: Date, departmentId: string) {
+  function createInMonth(apprenticeId: string, m: Date, departmentId: string) {
     if (!departmentId) return;
     const y = m.getFullYear();
     const mi = m.getMonth();
@@ -151,13 +155,63 @@ export function Planner({
     });
   }
 
+  function resizeToMonth(
+    placementId: string,
+    edge: "start" | "end",
+    m: Date,
+  ) {
+    const p = placements.find((x) => x.id === placementId);
+    if (!p) return;
+    const y = m.getFullYear();
+    const mi = m.getMonth();
+
+    if (edge === "start") {
+      // Start auf Monatsanfang; nicht hinter das Ende rutschen lassen.
+      let von = ymd(y, mi, 1);
+      if (calKey(y, mi, 1) > isoToKey(p.bis)) {
+        const b = new Date(p.bis);
+        von = ymd(b.getUTCFullYear(), b.getUTCMonth(), 1);
+      }
+      startTransition(async () => {
+        await updatePlacement({ id: placementId, von });
+      });
+    } else {
+      // Ende auf Monatsende; nicht vor den Start rutschen lassen.
+      let bis = ymd(y, mi, lastDayOfMonth(y, mi));
+      if (calKey(y, mi, lastDayOfMonth(y, mi)) < isoToKey(p.von)) {
+        const v = new Date(p.von);
+        const vy = v.getUTCFullYear();
+        const vm = v.getUTCMonth();
+        bis = ymd(vy, vm, lastDayOfMonth(vy, vm));
+      }
+      startTransition(async () => {
+        await updatePlacement({ id: placementId, bis });
+      });
+    }
+  }
+
+  function onCellDrop(apprenticeId: string, m: Date, raw: string) {
+    let payload: DragPayload | null = null;
+    try {
+      payload = JSON.parse(raw) as DragPayload;
+    } catch {
+      return;
+    }
+    if (!payload) return;
+    if (payload.type === "new") {
+      createInMonth(apprenticeId, m, payload.departmentId);
+    } else if (payload.type === "resize") {
+      resizeToMonth(payload.placementId, payload.edge, m);
+    }
+  }
+
   function handleDelete(id: string) {
     startTransition(async () => {
       await deletePlacement(id);
     });
   }
 
-  const gridCols = "200px repeat(3, minmax(0, 1fr))";
+  const gridCols = "180px repeat(3, minmax(0, 1fr))";
 
   return (
     <div className={cn(isPending && "pointer-events-none opacity-70")}>
@@ -214,16 +268,16 @@ export function Planner({
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row">
+      <div className="flex flex-col gap-4 xl:flex-row">
         {/* Planer-Raster */}
         <Card className="flex-1 overflow-hidden">
           <CardContent className="overflow-x-auto">
-            <div className="min-w-[640px]">
+            <div className="min-w-[600px]">
               <div
                 className="grid items-center border-b pb-2 text-xs font-medium text-muted-foreground"
                 style={{ gridTemplateColumns: gridCols }}
               >
-                <div>Azubi</div>
+                <div className="pl-1">Azubi</div>
                 {months.map((m, i) => (
                   <div key={i} className="px-2 text-center">
                     {MONTH_FMT.format(m)}
@@ -242,7 +296,7 @@ export function Planner({
                     className="grid items-stretch border-b last:border-0"
                     style={{ gridTemplateColumns: gridCols }}
                   >
-                    <div className="py-3 pr-3">
+                    <div className="py-3 pr-3 pl-1">
                       <div className="text-sm font-medium">
                         {a.nachname}, {a.vorname}
                       </div>
@@ -252,7 +306,7 @@ export function Planner({
                     </div>
                     {months.map((m, i) => {
                       const key = `${a.id}:${i}`;
-                      const cell = placementsInCell(a.id, m);
+                      const cell = placementsInMonth(a.id, m);
                       return (
                         <div
                           key={i}
@@ -266,33 +320,80 @@ export function Planner({
                           }
                           onDrop={(e) => {
                             e.preventDefault();
-                            const depId = e.dataTransfer.getData("text/plain");
                             setHoverKey(null);
-                            handleDrop(a.id, m, depId);
+                            onCellDrop(a.id, m, e.dataTransfer.getData("text/plain"));
                           }}
                           className={cn(
-                            "min-h-16 space-y-1 border-l p-1.5 transition-colors",
+                            "flex min-h-16 flex-col justify-center gap-1 border-l py-1.5 transition-colors",
                             hoverKey === key && "bg-indigo-50 dark:bg-indigo-950/40",
                           )}
                         >
-                          {cell.map((p) => (
-                            <div
-                              key={p.id}
-                              className="group flex items-center justify-between gap-1 rounded-md bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100"
-                            >
-                              <span className="truncate">
-                                {p.departmentName}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(p.id)}
-                                className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                aria-label="Einsatz entfernen"
+                          {cell.map((p) => {
+                            const isStart = !(i > 0 && overlapsMonth(p, months[i - 1]));
+                            const isEnd = !(i < 2 && overlapsMonth(p, months[i + 1]));
+                            return (
+                              <div
+                                key={p.id}
+                                className={cn(
+                                  "group/bar relative flex h-7 items-center bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100",
+                                  isStart && "rounded-l-md",
+                                  isEnd && "rounded-r-md",
+                                )}
                               >
-                                <X className="size-3.5" />
-                              </button>
-                            </div>
-                          ))}
+                                {isStart && (
+                                  <span className="truncate px-2 text-xs font-medium">
+                                    {p.departmentName}
+                                  </span>
+                                )}
+                                {isEnd && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(p.id)}
+                                    className="ml-auto mr-2 shrink-0 opacity-0 transition-opacity group-hover/bar:opacity-100"
+                                    aria-label="Einsatz entfernen"
+                                  >
+                                    <X className="size-3.5" />
+                                  </button>
+                                )}
+                                {isStart && (
+                                  <span
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData(
+                                        "text/plain",
+                                        JSON.stringify({
+                                          type: "resize",
+                                          placementId: p.id,
+                                          edge: "start",
+                                        }),
+                                      );
+                                      e.dataTransfer.effectAllowed = "move";
+                                    }}
+                                    title="Anfang ziehen"
+                                    className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md bg-indigo-400/40 hover:bg-indigo-500/70"
+                                  />
+                                )}
+                                {isEnd && (
+                                  <span
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData(
+                                        "text/plain",
+                                        JSON.stringify({
+                                          type: "resize",
+                                          placementId: p.id,
+                                          edge: "end",
+                                        }),
+                                      );
+                                      e.dataTransfer.effectAllowed = "move";
+                                    }}
+                                    title="Ende ziehen"
+                                    className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md bg-indigo-400/40 hover:bg-indigo-500/70"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -304,7 +405,7 @@ export function Planner({
         </Card>
 
         {/* Abteilungs-Palette */}
-        <Card className="lg:w-64 lg:shrink-0">
+        <Card className="xl:w-64 xl:shrink-0">
           <CardHeader>
             <CardTitle>Geeignete Abteilungen</CardTitle>
           </CardHeader>
@@ -319,7 +420,10 @@ export function Planner({
                   key={dep.id}
                   draggable
                   onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", dep.id);
+                    e.dataTransfer.setData(
+                      "text/plain",
+                      JSON.stringify({ type: "new", departmentId: dep.id }),
+                    );
                     e.dataTransfer.effectAllowed = "copy";
                   }}
                   className="flex cursor-grab items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-xs hover:bg-muted active:cursor-grabbing"
@@ -330,9 +434,9 @@ export function Planner({
               ))
             )}
             <p className="pt-2 text-xs text-muted-foreground">
-              Abteilung auf einen Monat des Azubis ziehen, um einen Einsatz
-              anzulegen. Zum Entfernen über einen Einsatz fahren und auf ✕
-              klicken.
+              Abteilung auf einen Monat ziehen, um einen Einsatz anzulegen. Die
+              Enden eines Einsatzes kannst du auf andere Monate ziehen, um ihn zu
+              verlängern oder zu verkürzen.
             </p>
           </CardContent>
         </Card>

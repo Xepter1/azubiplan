@@ -367,10 +367,10 @@ export function Planner({
                                           edge: "start",
                                         }),
                                       );
-                                      e.dataTransfer.effectAllowed = "move";
+                                      e.dataTransfer.effectAllowed = "copy";
                                     }}
                                     title="Anfang ziehen"
-                                    className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md bg-indigo-400/40 hover:bg-indigo-500/70"
+                                    className="absolute left-0 top-0 h-full w-2 cursor-ew-resize rounded-l-md bg-indigo-500/50 hover:bg-indigo-600/80"
                                   />
                                 )}
                                 {isEnd && (
@@ -385,10 +385,10 @@ export function Planner({
                                           edge: "end",
                                         }),
                                       );
-                                      e.dataTransfer.effectAllowed = "move";
+                                      e.dataTransfer.effectAllowed = "copy";
                                     }}
                                     title="Ende ziehen"
-                                    className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md bg-indigo-400/40 hover:bg-indigo-500/70"
+                                    className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md bg-indigo-500/50 hover:bg-indigo-600/80"
                                   />
                                 )}
                               </div>

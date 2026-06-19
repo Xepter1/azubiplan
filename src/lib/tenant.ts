@@ -1,21 +1,30 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// Aktueller Mandant.
-//
-// PROVISORISCH: Solange es noch keinen Login gibt, arbeiten wir mit dem ersten
-// (Demo-)Mandanten in der Datenbank. Sobald Auth.js steht, kommt die tenantId
-// aus der Session des angemeldeten Users — und zusätzlich erzwingt PostgreSQL
-// Row-Level-Security die Trennung auf DB-Ebene.
-export async function getActiveTenant() {
-  const tenant = await prisma.tenant.findFirst({
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!tenant) {
-    throw new Error(
-      "Kein Mandant in der Datenbank gefunden. Bitte einmalig `npm run db:seed` ausführen.",
-    );
+// Erzwingt eine angemeldete Session — sonst Weiterleitung zum Login.
+export async function requireSession() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/login");
   }
+  return session;
+}
 
+// tenantId des angemeldeten Users. Quelle der Mandantentrennung in der App-Schicht
+// (später zusätzlich durch PostgreSQL Row-Level-Security auf DB-Ebene erzwungen).
+export async function getCurrentTenantId() {
+  const session = await requireSession();
+  return session.user.tenantId;
+}
+
+// Vollständiger Mandanten-Datensatz des angemeldeten Users (z.B. für die Anzeige).
+export async function getActiveTenant() {
+  const tenantId = await getCurrentTenantId();
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) {
+    redirect("/login");
+  }
   return tenant;
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveTenant } from "@/lib/tenant";
 
@@ -47,4 +48,9 @@ export async function softDeleteApprentice(formData: FormData) {
   });
 
   revalidatePath("/azubis");
+}
+
+// Abmelden und zurück zum Login.
+export async function logout() {
+  await signOut({ redirectTo: "/login" });
 }

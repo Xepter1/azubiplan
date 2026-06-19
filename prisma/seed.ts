@@ -1,4 +1,4 @@
-// Seed-Skript: legt einen Demo-Mandanten mit Beispieldaten an.
+// Seed-Skript: legt einen Demo-Mandanten mit Beispieldaten + Login an.
 //   Ausführen:  npm run db:seed
 // Idempotent: ein vorhandener Demo-Mandant wird vorher inkl. Daten entfernt.
 //
@@ -6,6 +6,7 @@
 // (nicht über das @/-Alias), damit das Skript auch außerhalb des Next.js-Bundlers
 // (hier: via tsx) läuft.
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 
@@ -24,6 +25,17 @@ async function main() {
   await prisma.tenant.deleteMany({ where: { name: TENANT_NAME } });
 
   const tenant = await prisma.tenant.create({ data: { name: TENANT_NAME } });
+
+  // Demo-Login: admin@demo.de / demo1234
+  await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      email: "admin@demo.de",
+      name: "Demo Admin",
+      role: "ADMIN",
+      passwordHash: await bcrypt.hash("demo1234", 10),
+    },
+  });
 
   const fiae = await prisma.profession.create({
     data: {
@@ -79,6 +91,7 @@ async function main() {
   console.log(
     `✅ Seed fertig: Mandant "${tenant.name}" mit ${count} Azubis, 2 Berufen und 4 Abteilungen.`,
   );
+  console.log("   Login: admin@demo.de / demo1234");
 }
 
 main()

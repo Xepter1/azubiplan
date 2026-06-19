@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createApprentice, softDeleteApprentice } from "./actions";
+import { createApprentice, logout, softDeleteApprentice } from "./actions";
 
 // Immer frische Daten aus der DB (kein statisches Caching dieser Seite).
 export const dynamic = "force-dynamic";
@@ -42,11 +42,18 @@ export default async function AzubisPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Azubis</h1>
-        <p className="text-sm text-muted-foreground">
-          Mandant: {tenant.name} · {apprentices.length} aktive Azubis
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Azubis</h1>
+          <p className="text-sm text-muted-foreground">
+            Mandant: {tenant.name} · {apprentices.length} aktive Azubis
+          </p>
+        </div>
+        <form action={logout}>
+          <Button type="submit" variant="outline" size="sm">
+            Abmelden
+          </Button>
+        </form>
       </header>
 
       <Card className="mb-8">

@@ -1,10 +1,11 @@
 # AzubiPlan — Architektur
 
 > Verwaltungssoftware für Auszubildende (mandantenfähige B2B-SaaS).
-> Stand: 2026-06-19 · Status: **Planung** (noch kein Code)
+> Stand: 2026-06-19 · Status: **MVP in Arbeit** — Gerüst + erste Features stehen.
 
-Dieses Dokument hält die Architektur- und Technologie-Entscheidungen fest, damit wir
-projektübergreifend und von verschiedenen Rechnern aus denselben Stand haben.
+Dieses Dokument hält die Architektur- und Technologie-Entscheidungen fest (das „Warum").
+Lokales Setup & Onboarding: **[README.md](README.md)** · aktueller Umsetzungsstand:
+**[CLAUDE.md](CLAUDE.md)** und Abschnitt 10.
 
 ---
 
@@ -164,6 +165,11 @@ Was fehlt, ist die **Lücke**, die der Ausbilder schließen muss.
 > Hinweis: `REQUIRED_CONTENT` und `TAUGHT_CONTENT` sind Verknüpfungstabellen
 > (Beruf ↔ Lerninhalt bzw. Abteilung ↔ Lerninhalt).
 
+> **Umgesetzt:** Dieses Modell ist als `prisma/schema.prisma` implementiert (die
+> verbindliche Single Source of Truth). Ergänzungen seither: `passwordHash` am `USER`
+> (Login) und `DEPARTMENT_PROFESSION` als **Eignung** — welche Abteilung für welchen
+> Beruf als Einsatzort infrage kommt (steuert den Planer).
+
 ---
 
 ## 7. Datenschutz / DSGVO (von Tag 1)
@@ -208,7 +214,14 @@ Wir sind rechtlich **Auftragsverarbeiter** für unsere Kunden.
 
 ---
 
-## 10. Nächster Schritt
+## 10. Umsetzungsstand & nächste Schritte
 
-Aus dem Datenmodell (Abschnitt 6) wird das **Prisma-Schema** abgeleitet. Das ist der
-konkrete nächste Baustein, bevor Code geschrieben wird.
+Das Prisma-Schema (Abschnitt 6) ist umgesetzt und migriert. Es laufen: **Login mit
+Rollen**, App-Shell mit rollenabhängiger Navigation, **Azubi-Verwaltung** und der
+visuelle **Einsatzplaner** (Drag & Drop, Ansichten Monat/Woche/Tag, Abteilungs-Eignung
+je Beruf). Stand im Detail: **[README.md](README.md)** / **[CLAUDE.md](CLAUDE.md)**.
+
+Nächste Bausteine:
+1. **Row-Level-Security** in PostgreSQL — DB-tiefe Mandantentrennung *unter* der App-Schicht.
+2. **Abdeckungs-Check** — Lückenanzeige der Pflicht-Lerninhalte (das Killer-Feature).
+3. **Beurteilungen & Noten**, danach Stammdaten-Pflege (Abteilungen/Berufe/Lerninhalte) per UI.

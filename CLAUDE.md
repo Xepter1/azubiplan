@@ -22,10 +22,13 @@ Lokal starten: `npm run db:up` (DB-Container), `npm run db:seed` (Demo-Daten) un
 admin@demo.de (Admin), ausbilder@demo.de, beauftragter@demo.de, azubi@demo.de.
 
 Umgesetzt: **App-Shell** mit rollenabhängiger Sidebar (Route-Gruppe `src/app/(app)`) +
-rollenabhängigem Dashboard, Azubi-Verwaltung (anlegen/auflisten/Soft-Delete), Listen für
-Abteilungen/Benutzer/Einsatzplanung und **Login** (Auth.js v5, E-Mail + Passwort; die
-Session trägt `tenantId` + `role`, daraus speist sich die Mandantentrennung in der
-App-Schicht). Navigations-Mapping (Rolle → Reiter): `src/app/(app)/_components/nav.ts`.
+rollenabhängigem Dashboard, **Login** (Auth.js v5, E-Mail + Passwort; Session trägt
+`tenantId` + `role` → Mandantentrennung in der App-Schicht), Azubi-Verwaltung
+(anlegen/auflisten/Soft-Delete) und der **visuelle Einsatzplaner** (`einsatzplanung/`):
+Filter nach Beruf/Ausbildungsjahr, Azubis zeilenweise, Ansichten **Monat/Woche/Tag**,
+Einsätze per **Drag & Drop** anlegen und Enden live ziehen; Abteilungen haben Farben und
+eine **Eignung je Beruf** (Modell `DepartmentProfession`). Navigations-Mapping (Rolle →
+Reiter): `src/app/(app)/_components/nav.ts`. Setup/Onboarding: **[README.md](README.md)**.
 
 Nächste Schritte: **Row-Level-Security** in PostgreSQL (DB-tiefe Mandantentrennung als
 Absicherung *unter* der App-Schicht), danach Beurteilung & Noten. Offene
@@ -39,8 +42,8 @@ Modellierungs-Fragen stehen als `TODO (klären)` in `prisma/schema.prisma`.
 - **Auth.js** — Login + Rollen (Keycloak später für Enterprise-SSO)
 - **Hetzner** (Deutschland) + Docker — Hosting (DSGVO-Datenstandort)
 
-Noch offen: Prisma vs. Drizzle (Tendenz Prisma); Backend in Next.js vs. später NestJS
-(Tendenz: erstmal in Next.js).
+Entschieden: **Prisma 7** (mit `@prisma/adapter-pg`). Noch offen: Backend in Next.js vs.
+später NestJS (Tendenz: erstmal in Next.js).
 
 ## Wie hier gearbeitet wird
 - **Auf Deutsch antworten.**

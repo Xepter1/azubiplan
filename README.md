@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AzubiPlan
 
-## Getting Started
+Mandantenfähige B2B-SaaS zur **Verwaltung und Verplanung von Auszubildenden**.
+Unternehmen legen Azubis und Abteilungen an; Azubis rotieren durch Abteilungen, und
+Ausbilder:innen behalten den Überblick, ob alle Pflicht-Lerninhalte abgedeckt sind.
 
-First, run the development server:
+> **Stand:** MVP in Arbeit. Es laufen bereits: Login mit Rollen, App-Shell mit
+> rollenabhängiger Navigation, Azubi-Verwaltung und der visuelle **Einsatzplaner**
+> (Drag & Drop, Ansichten Monat/Woche/Tag).
+>
+> Das große Bild (Stack-Entscheidungen, Datenmodell, DSGVO, Roadmap):
+> **[ARCHITECTURE.md](ARCHITECTURE.md)** · Schnell-Kontext für KI-Sitzungen: **[CLAUDE.md](CLAUDE.md)**
+
+## Tech-Stack
+- **Next.js 16** (TypeScript, App Router) — Frontend + Backend in einem Projekt
+- **Prisma 7** + **PostgreSQL** (lokal via Docker)
+- **Auth.js v5** — Login + Rollen
+- **shadcn/ui** + Tailwind CSS 4 — Oberfläche
+
+## Voraussetzungen
+- **Node.js 20+** und npm (getestet mit Node 22)
+- **Docker Desktop** — für die lokale PostgreSQL-Datenbank (muss laufen)
+- **git**
+
+## Schnellstart (lokal)
 
 ```bash
+# 1. Repo holen
+git clone https://github.com/Xepter1/azubiplan.git
+cd azubiplan
+
+# 2. Abhängigkeiten installieren (erzeugt automatisch den Prisma-Client)
+npm install
+
+# 3. Umgebungsdatei anlegen
+cp .env.example .env
+#    danach in .env einen echten AUTH_SECRET eintragen, z. B. erzeugt mit:
+openssl rand -base64 32     # Ausgabe bei AUTH_SECRET="..." in der .env einsetzen
+
+# 4. Datenbank starten (Docker Desktop muss laufen)
+npm run db:up
+
+# 5. Schema anlegen + Demo-Daten einspielen
+npm run db:migrate          # legt die Tabellen an
+npm run db:seed             # Demo-Mandant, Logins, Azubis, Abteilungen, Rotationen
+
+# 6. App starten
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App öffnen: **http://localhost:3000**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Demo-Logins (Passwort jeweils `demo1234`)
+| E-Mail | Rolle | sieht … |
+|---|---|---|
+| `admin@demo.de` | Administrator | alles |
+| `ausbilder@demo.de` | Ausbilder:in | Planung, Azubis, Abteilungen |
+| `beauftragter@demo.de` | Ausbildungsbeauftragte:r | Beurteilungen, Azubis |
+| `azubi@demo.de` | Auszubildende:r | nur Dashboard + Beurteilungen |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Nützliche Befehle
+| Befehl | Zweck |
+|---|---|
+| `npm run dev` | Entwicklungsserver mit Hot Reload |
+| `npm run build` | Produktions-Build (prüft auch alle Typen) — vor dem Pushen sinnvoll |
+| `npm run db:up` / `npm run db:down` | DB-Container starten / stoppen |
+| `npm run db:migrate` | Schema-Migration anwenden bzw. neue erstellen |
+| `npm run db:seed` | Demo-Daten neu einspielen (löscht vorher den Demo-Mandanten) |
+| `npm run db:studio` | Prisma Studio — Datenbank im Browser ansehen/bearbeiten |
+| `npm run db:reset` | DB zurücksetzen + neu migrieren (danach `npm run db:seed`) |
+| `npm run lint` | ESLint |
 
-## Learn More
+## Projektstruktur (Kurzüberblick)
+```
+prisma/
+  schema.prisma          # Datenmodell — Single Source of Truth
+  migrations/            # versionierte DB-Änderungen
+  seed.ts                # Demo-Daten (npm run db:seed)
+src/
+  auth.ts                # Auth.js-Konfiguration (Login, Session, Rollen)
+  app/
+    login/               # Login-Seite + Server-Action
+    (app)/               # geschützter Bereich (Sidebar + Topbar)
+      _components/        # Sidebar, Topbar, Navigations-Mapping (nav.ts)
+      dashboard/          # rollenabhängiges Dashboard
+      auszubildende/      # Azubi-Verwaltung (Liste + Anlegen)
+      einsatzplanung/     # visueller Planer (Drag & Drop) + Server-Actions
+      abteilungen/ benutzer/ beurteilungen/ einstellungen/
+    api/auth/            # Auth.js-Endpunkte
+  lib/
+    prisma.ts            # Prisma-Client (Singleton, @prisma/adapter-pg)
+    tenant.ts            # aktiver Mandant aus der Login-Session
+    roles.ts, rotation.ts
+  generated/prisma/      # generierter Prisma-Client (gitignored, via postinstall)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Gut zu wissen
+- **Mandantentrennung** läuft aktuell in der App-Schicht: Jede Abfrage filtert nach
+  `tenantId` aus der Session. Als Absicherung *darunter* kommt noch PostgreSQL
+  **Row-Level-Security** (siehe [ARCHITECTURE.md](ARCHITECTURE.md)).
+- Der **generierte Prisma-Client** (`src/generated/prisma`) wird nicht committet;
+  `npm install` erzeugt ihn automatisch neu (`postinstall`-Skript).
+- **Geheimnisse** stehen in `.env` und werden **nie** committet. `.env.example` ist die
+  Vorlage (Werte passen zur lokalen Docker-DB).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Zusammenarbeit
+- Kleines Team → wir committen klein und nachvollziehbar, aktuell direkt auf `main`.
+- Vor dem Pushen kurz `npm run build` laufen lassen — fängt Typ- und Importfehler ab.
+- **DSGVO von Tag 1** mitdenken (Minderjährige, §87 BetrVG/Mitbestimmung) — Details und
+  Stolpersteine in [ARCHITECTURE.md](ARCHITECTURE.md).

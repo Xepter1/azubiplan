@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { GripVertical, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import {
   Card,
@@ -31,16 +31,79 @@ type Placement = {
   bis: string; // ISO
 };
 
+type Mode = "monat" | "woche" | "tag";
+type Col = {
+  key: string;
+  label: string;
+  sub?: string;
+  startKey: number;
+  endKey: number;
+  vonStr: string;
+  bisStr: string;
+  weekend?: boolean;
+};
+type DragPayload =
+  | { type: "new"; departmentId: string }
+  | { type: "resize"; placementId: string; edge: "start" | "end" };
+
+// Demo-Farbpalette (stabil je Abteilung). Statische Klassen, damit Tailwind sie findet.
+const PALETTE = [
+  "indigo",
+  "emerald",
+  "amber",
+  "rose",
+  "sky",
+  "violet",
+  "teal",
+  "orange",
+] as const;
+const BAR_CLASS: Record<string, string> = {
+  indigo: "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/70 dark:text-indigo-50",
+  emerald: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/70 dark:text-emerald-50",
+  amber: "bg-amber-100 text-amber-900 dark:bg-amber-900/70 dark:text-amber-50",
+  rose: "bg-rose-100 text-rose-900 dark:bg-rose-900/70 dark:text-rose-50",
+  sky: "bg-sky-100 text-sky-900 dark:bg-sky-900/70 dark:text-sky-50",
+  violet: "bg-violet-100 text-violet-900 dark:bg-violet-900/70 dark:text-violet-50",
+  teal: "bg-teal-100 text-teal-900 dark:bg-teal-900/70 dark:text-teal-50",
+  orange: "bg-orange-100 text-orange-900 dark:bg-orange-900/70 dark:text-orange-50",
+};
+const DOT_CLASS: Record<string, string> = {
+  indigo: "bg-indigo-500",
+  emerald: "bg-emerald-500",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
+  sky: "bg-sky-500",
+  violet: "bg-violet-500",
+  teal: "bg-teal-500",
+  orange: "bg-orange-500",
+};
+
 const MONTH_FMT = new Intl.DateTimeFormat("de-DE", {
   month: "short",
   year: "numeric",
 });
+const RANGE_FMT = new Intl.DateTimeFormat("de-DE", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
+function addMonths(date: Date, n: number) {
+  return new Date(date.getFullYear(), date.getMonth() + n, 1);
+}
+function addDays(date: Date, n: number) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+}
 function startOfQuarter(now: Date) {
   return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
 }
-function addMonths(date: Date, n: number) {
-  return new Date(date.getFullYear(), date.getMonth() + n, 1);
+function startOfWeek(now: Date) {
+  const day = (now.getDay() + 6) % 7; // Montag = 0
+  return addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), -day);
+}
+function startOfDay(now: Date) {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 function lastDayOfMonth(year: number, monthIndex: number) {
   return new Date(year, monthIndex + 1, 0).getDate();
@@ -48,20 +111,27 @@ function lastDayOfMonth(year: number, monthIndex: number) {
 function ymd(year: number, monthIndex: number, day: number) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+function ymdLocal(d: Date) {
+  return ymd(d.getFullYear(), d.getMonth(), d.getDate());
+}
 function calKey(year: number, monthIndex: number, day: number) {
   return year * 10000 + (monthIndex + 1) * 100 + day;
+}
+function keyLocal(d: Date) {
+  return calKey(d.getFullYear(), d.getMonth(), d.getDate());
 }
 function isoToKey(iso: string) {
   const dt = new Date(iso);
   return calKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
 }
-function overlapsMonth(p: Placement, m: Date) {
-  const y = m.getFullYear();
-  const mi = m.getMonth();
-  return (
-    isoToKey(p.von) <= calKey(y, mi, lastDayOfMonth(y, mi)) &&
-    isoToKey(p.bis) >= calKey(y, mi, 1)
-  );
+function isoWeek(d: Date) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const fDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - fDayNum + 3);
+  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / 604800000);
 }
 function ausbildungsjahr(startISO: string, now: Date) {
   const s = new Date(startISO);
@@ -74,9 +144,60 @@ function ausbildungsjahr(startISO: string, now: Date) {
   return Math.max(1, years + 1);
 }
 
-type DragPayload =
-  | { type: "new"; departmentId: string }
-  | { type: "resize"; placementId: string; edge: "start" | "end" };
+function defaultAnchor(mode: Mode, now: Date) {
+  if (mode === "monat") return startOfQuarter(now);
+  if (mode === "woche") return startOfWeek(now);
+  return startOfDay(now);
+}
+function buildColumns(mode: Mode, anchor: Date): Col[] {
+  const cols: Col[] = [];
+  if (mode === "monat") {
+    for (let i = 0; i < 3; i++) {
+      const dt = addMonths(anchor, i);
+      const y = dt.getFullYear();
+      const m = dt.getMonth();
+      const last = lastDayOfMonth(y, m);
+      cols.push({
+        key: `m${y}-${m}`,
+        label: MONTH_FMT.format(dt),
+        startKey: calKey(y, m, 1),
+        endKey: calKey(y, m, last),
+        vonStr: ymd(y, m, 1),
+        bisStr: ymd(y, m, last),
+      });
+    }
+  } else if (mode === "woche") {
+    for (let i = 0; i < 8; i++) {
+      const start = addDays(anchor, i * 7);
+      const end = addDays(start, 6);
+      cols.push({
+        key: `w${keyLocal(start)}`,
+        label: `KW ${isoWeek(start)}`,
+        sub: `${start.getDate()}.${start.getMonth() + 1}.`,
+        startKey: keyLocal(start),
+        endKey: keyLocal(end),
+        vonStr: ymdLocal(start),
+        bisStr: ymdLocal(end),
+      });
+    }
+  } else {
+    for (let i = 0; i < 14; i++) {
+      const dt = addDays(anchor, i);
+      const wd = (dt.getDay() + 6) % 7;
+      cols.push({
+        key: `d${keyLocal(dt)}`,
+        label: WEEKDAYS[wd],
+        sub: `${dt.getDate()}.`,
+        startKey: keyLocal(dt),
+        endKey: keyLocal(dt),
+        vonStr: ymdLocal(dt),
+        bisStr: ymdLocal(dt),
+        weekend: wd >= 5,
+      });
+    }
+  }
+  return cols;
+}
 
 export function Planner({
   apprentices,
@@ -90,6 +211,16 @@ export function Planner({
   placements: Placement[];
 }) {
   const now = useMemo(() => new Date(), []);
+
+  const colorOf = useMemo(() => {
+    const map: Record<string, string> = {};
+    [...departments]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .forEach((dep, i) => {
+        map[dep.id] = PALETTE[i % PALETTE.length];
+      });
+    return map;
+  }, [departments]);
 
   const defaultProfession = useMemo(() => {
     const counts = new Map<string, number>();
@@ -110,17 +241,13 @@ export function Planner({
   }, [apprentices, professions]);
 
   const [professionId, setProfessionId] = useState(defaultProfession);
-  const [year, setYear] = useState(0); // 0 = alle
-  const [quarterStart, setQuarterStart] = useState(() =>
-    startOfQuarter(new Date()),
-  );
+  const [year, setYear] = useState(0);
+  const [mode, setMode] = useState<Mode>("monat");
+  const [anchor, setAnchor] = useState(() => startOfQuarter(new Date()));
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const months = useMemo(
-    () => [0, 1, 2].map((i) => addMonths(quarterStart, i)),
-    [quarterStart],
-  );
+  const cols = useMemo(() => buildColumns(mode, anchor), [mode, anchor]);
 
   const filtered = useMemo(
     () =>
@@ -138,59 +265,53 @@ export function Planner({
     [departments, professionId],
   );
 
-  function placementsInMonth(apprenticeId: string, m: Date) {
-    return placements.filter(
-      (p) => p.apprenticeId === apprenticeId && overlapsMonth(p, m),
+  function overlapsCol(p: Placement, c: Col) {
+    return isoToKey(p.von) <= c.endKey && isoToKey(p.bis) >= c.startKey;
+  }
+
+  function changeMode(m: Mode) {
+    setMode(m);
+    setAnchor(defaultAnchor(m, new Date()));
+  }
+  function shift(dir: number) {
+    setAnchor((a) =>
+      mode === "monat"
+        ? addMonths(a, dir * 3)
+        : mode === "woche"
+          ? addDays(a, dir * 28)
+          : addDays(a, dir * 7),
     );
   }
 
-  function createInMonth(apprenticeId: string, m: Date, departmentId: string) {
+  function createInCol(apprenticeId: string, c: Col, departmentId: string) {
     if (!departmentId) return;
-    const y = m.getFullYear();
-    const mi = m.getMonth();
-    const von = ymd(y, mi, 1);
-    const bis = ymd(y, mi, lastDayOfMonth(y, mi));
     startTransition(async () => {
-      await createPlacement({ apprenticeId, departmentId, von, bis });
+      await createPlacement({
+        apprenticeId,
+        departmentId,
+        von: c.vonStr,
+        bis: c.bisStr,
+      });
     });
   }
-
-  function resizeToMonth(
-    placementId: string,
-    edge: "start" | "end",
-    m: Date,
-  ) {
+  function resizeToCol(placementId: string, edge: "start" | "end", c: Col) {
     const p = placements.find((x) => x.id === placementId);
     if (!p) return;
-    const y = m.getFullYear();
-    const mi = m.getMonth();
-
     if (edge === "start") {
-      // Start auf Monatsanfang; nicht hinter das Ende rutschen lassen.
-      let von = ymd(y, mi, 1);
-      if (calKey(y, mi, 1) > isoToKey(p.bis)) {
-        const b = new Date(p.bis);
-        von = ymd(b.getUTCFullYear(), b.getUTCMonth(), 1);
-      }
+      const bisDate = p.bis.slice(0, 10);
+      const von = c.vonStr > bisDate ? bisDate : c.vonStr; // nicht hinter das Ende
       startTransition(async () => {
         await updatePlacement({ id: placementId, von });
       });
     } else {
-      // Ende auf Monatsende; nicht vor den Start rutschen lassen.
-      let bis = ymd(y, mi, lastDayOfMonth(y, mi));
-      if (calKey(y, mi, lastDayOfMonth(y, mi)) < isoToKey(p.von)) {
-        const v = new Date(p.von);
-        const vy = v.getUTCFullYear();
-        const vm = v.getUTCMonth();
-        bis = ymd(vy, vm, lastDayOfMonth(vy, vm));
-      }
+      const vonDate = p.von.slice(0, 10);
+      const bis = c.bisStr < vonDate ? vonDate : c.bisStr; // nicht vor den Start
       startTransition(async () => {
         await updatePlacement({ id: placementId, bis });
       });
     }
   }
-
-  function onCellDrop(apprenticeId: string, m: Date, raw: string) {
+  function onCellDrop(apprenticeId: string, c: Col, raw: string) {
     let payload: DragPayload | null = null;
     try {
       payload = JSON.parse(raw) as DragPayload;
@@ -198,24 +319,27 @@ export function Planner({
       return;
     }
     if (!payload) return;
-    if (payload.type === "new") {
-      createInMonth(apprenticeId, m, payload.departmentId);
-    } else if (payload.type === "resize") {
-      resizeToMonth(payload.placementId, payload.edge, m);
-    }
+    if (payload.type === "new") createInCol(apprenticeId, c, payload.departmentId);
+    else if (payload.type === "resize")
+      resizeToCol(payload.placementId, payload.edge, c);
   }
-
   function handleDelete(id: string) {
     startTransition(async () => {
       await deletePlacement(id);
     });
   }
 
-  const gridCols = "180px repeat(3, minmax(0, 1fr))";
+  const colMin = mode === "tag" ? 44 : mode === "woche" ? 72 : 0;
+  const gridCols = `180px repeat(${cols.length}, minmax(${colMin}px, 1fr))`;
+  const innerMinWidth = 180 + cols.length * (colMin || 120);
+  const rangeLabel =
+    mode === "monat"
+      ? `${MONTH_FMT.format(cols[0] ? addMonths(anchor, 0) : anchor)} – ${MONTH_FMT.format(addMonths(anchor, 2))}`
+      : `${RANGE_FMT.format(anchor)} – ${RANGE_FMT.format(addDays(anchor, mode === "woche" ? 8 * 7 - 1 : 13))}`;
 
   return (
     <div className={cn(isPending && "pointer-events-none opacity-70")}>
-      {/* Filter */}
+      {/* Filter + Ansicht */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="grid gap-1 text-xs text-muted-foreground">
           Beruf
@@ -245,26 +369,36 @@ export function Planner({
             <option value={4}>4. Jahr</option>
           </select>
         </label>
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setQuarterStart(addMonths(quarterStart, -3))}
-          >
-            ‹
-          </Button>
-          <span className="min-w-44 text-center text-sm font-medium">
-            {MONTH_FMT.format(months[0])} – {MONTH_FMT.format(months[2])}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setQuarterStart(addMonths(quarterStart, 3))}
-          >
-            ›
-          </Button>
+
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border p-0.5">
+            {(["monat", "woche", "tag"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => changeMode(m)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                  mode === m
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => shift(-1)}>
+              ‹
+            </Button>
+            <span className="min-w-44 text-center text-sm font-medium">
+              {rangeLabel}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => shift(1)}>
+              ›
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -272,15 +406,26 @@ export function Planner({
         {/* Planer-Raster */}
         <Card className="flex-1 overflow-hidden">
           <CardContent className="overflow-x-auto">
-            <div className="min-w-[600px]">
+            <div style={{ minWidth: innerMinWidth }}>
               <div
-                className="grid items-center border-b pb-2 text-xs font-medium text-muted-foreground"
+                className="grid items-end border-b pb-2 text-xs font-medium text-muted-foreground"
                 style={{ gridTemplateColumns: gridCols }}
               >
                 <div className="pl-1">Azubi</div>
-                {months.map((m, i) => (
-                  <div key={i} className="px-2 text-center">
-                    {MONTH_FMT.format(m)}
+                {cols.map((c) => (
+                  <div
+                    key={c.key}
+                    className={cn(
+                      "px-1 text-center leading-tight",
+                      c.weekend && "rounded-t bg-muted/50",
+                    )}
+                  >
+                    <div>{c.label}</div>
+                    {c.sub && (
+                      <div className="text-[10px] font-normal text-muted-foreground/80">
+                        {c.sub}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -304,38 +449,45 @@ export function Planner({
                         {ausbildungsjahr(a.start, now)}. Jahr
                       </div>
                     </div>
-                    {months.map((m, i) => {
-                      const key = `${a.id}:${i}`;
-                      const cell = placementsInMonth(a.id, m);
+                    {cols.map((c, idx) => {
+                      const cellKey = `${a.id}:${c.key}`;
+                      const cellPlacements = placements.filter(
+                        (p) => p.apprenticeId === a.id && overlapsCol(p, c),
+                      );
                       return (
                         <div
-                          key={i}
+                          key={c.key}
                           onDragOver={(e) => {
                             e.preventDefault();
                             e.dataTransfer.dropEffect = "copy";
                           }}
-                          onDragEnter={() => setHoverKey(key)}
+                          onDragEnter={() => setHoverKey(cellKey)}
                           onDragLeave={() =>
-                            setHoverKey((k) => (k === key ? null : k))
+                            setHoverKey((k) => (k === cellKey ? null : k))
                           }
                           onDrop={(e) => {
                             e.preventDefault();
                             setHoverKey(null);
-                            onCellDrop(a.id, m, e.dataTransfer.getData("text/plain"));
+                            onCellDrop(a.id, c, e.dataTransfer.getData("text/plain"));
                           }}
                           className={cn(
                             "flex min-h-16 flex-col justify-center gap-1 border-l py-1.5 transition-colors",
-                            hoverKey === key && "bg-indigo-50 dark:bg-indigo-950/40",
+                            c.weekend && "bg-muted/30",
+                            hoverKey === cellKey && "bg-indigo-50 dark:bg-indigo-950/40",
                           )}
                         >
-                          {cell.map((p) => {
-                            const isStart = !(i > 0 && overlapsMonth(p, months[i - 1]));
-                            const isEnd = !(i < 2 && overlapsMonth(p, months[i + 1]));
+                          {cellPlacements.map((p) => {
+                            const isStart = !(idx > 0 && overlapsCol(p, cols[idx - 1]));
+                            const isEnd = !(
+                              idx < cols.length - 1 && overlapsCol(p, cols[idx + 1])
+                            );
+                            const barColor = BAR_CLASS[colorOf[p.departmentId]] ?? BAR_CLASS.indigo;
                             return (
                               <div
                                 key={p.id}
                                 className={cn(
-                                  "group/bar relative flex h-7 items-center bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100",
+                                  "group/bar relative flex h-7 items-center",
+                                  barColor,
                                   isStart && "rounded-l-md",
                                   isEnd && "rounded-r-md",
                                 )}
@@ -370,7 +522,7 @@ export function Planner({
                                       e.dataTransfer.effectAllowed = "copy";
                                     }}
                                     title="Anfang ziehen"
-                                    className="absolute left-0 top-0 h-full w-2 cursor-ew-resize rounded-l-md bg-indigo-500/50 hover:bg-indigo-600/80"
+                                    className="absolute left-0 top-0 h-full w-2 cursor-ew-resize rounded-l-md bg-black/10 hover:bg-black/30 dark:bg-white/15 dark:hover:bg-white/40"
                                   />
                                 )}
                                 {isEnd && (
@@ -388,7 +540,7 @@ export function Planner({
                                       e.dataTransfer.effectAllowed = "copy";
                                     }}
                                     title="Ende ziehen"
-                                    className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md bg-indigo-500/50 hover:bg-indigo-600/80"
+                                    className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md bg-black/10 hover:bg-black/30 dark:bg-white/15 dark:hover:bg-white/40"
                                   />
                                 )}
                               </div>
@@ -428,15 +580,20 @@ export function Planner({
                   }}
                   className="flex cursor-grab items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-xs hover:bg-muted active:cursor-grabbing"
                 >
-                  <GripVertical className="size-4 text-muted-foreground" />
+                  <span
+                    className={cn(
+                      "size-3 shrink-0 rounded-full",
+                      DOT_CLASS[colorOf[dep.id]] ?? DOT_CLASS.indigo,
+                    )}
+                  />
                   <span className="truncate">{dep.name}</span>
                 </div>
               ))
             )}
             <p className="pt-2 text-xs text-muted-foreground">
-              Abteilung auf einen Monat ziehen, um einen Einsatz anzulegen. Die
-              Enden eines Einsatzes kannst du auf andere Monate ziehen, um ihn zu
-              verlängern oder zu verkürzen.
+              Abteilung auf eine Spalte ziehen, um einen Einsatz anzulegen
+              (1&nbsp;{mode === "monat" ? "Monat" : mode === "woche" ? "Woche" : "Tag"}).
+              Enden ziehen verlängert/verkürzt.
             </p>
           </CardContent>
         </Card>

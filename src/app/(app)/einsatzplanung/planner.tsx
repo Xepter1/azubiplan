@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import {
+  type DragEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { X } from "lucide-react";
 
 import {
@@ -42,11 +49,11 @@ type Col = {
   bisStr: string;
   weekend?: boolean;
 };
+type Edge = "start" | "end";
 type DragPayload =
   | { type: "new"; departmentId: string }
-  | { type: "resize"; placementId: string; edge: "start" | "end" };
+  | { type: "resize"; placementId: string; edge: Edge };
 
-// Demo-Farbpalette (stabil je Abteilung). Statische Klassen, damit Tailwind sie findet.
 const PALETTE = [
   "indigo",
   "emerald",
@@ -78,10 +85,7 @@ const DOT_CLASS: Record<string, string> = {
   orange: "bg-orange-500",
 };
 
-const MONTH_FMT = new Intl.DateTimeFormat("de-DE", {
-  month: "short",
-  year: "numeric",
-});
+const MONTH_FMT = new Intl.DateTimeFormat("de-DE", { month: "short", year: "numeric" });
 const RANGE_FMT = new Intl.DateTimeFormat("de-DE", {
   day: "2-digit",
   month: "2-digit",
@@ -99,7 +103,7 @@ function startOfQuarter(now: Date) {
   return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
 }
 function startOfWeek(now: Date) {
-  const day = (now.getDay() + 6) % 7; // Montag = 0
+  const day = (now.getDay() + 6) % 7;
   return addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), -day);
 }
 function startOfDay(now: Date) {
@@ -138,12 +142,9 @@ function ausbildungsjahr(startISO: string, now: Date) {
   let years = now.getFullYear() - s.getUTCFullYear();
   const sm = s.getUTCMonth();
   const sd = s.getUTCDate();
-  if (now.getMonth() < sm || (now.getMonth() === sm && now.getDate() < sd)) {
-    years--;
-  }
+  if (now.getMonth() < sm || (now.getMonth() === sm && now.getDate() < sd)) years--;
   return Math.max(1, years + 1);
 }
-
 function defaultAnchor(mode: Mode, now: Date) {
   if (mode === "monat") return startOfQuarter(now);
   if (mode === "woche") return startOfWeek(now);
@@ -245,7 +246,25 @@ export function Planner({
   const [mode, setMode] = useState<Mode>("monat");
   const [anchor, setAnchor] = useState(() => startOfQuarter(new Date()));
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [activeResize, setActiveResize] = useState<{
+    placementId: string;
+    edge: Edge;
+  } | null>(null);
+  const [preview, setPreview] = useState<{
+    placementId: string;
+    edge: Edge;
+    colIndex: number;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const droppedRef = useRef(false);
+  const dragGhostRef = useRef<HTMLSpanElement>(null);
+
+  // Nach dem Speichern (neue Daten vom Server) Vorschau/Drag-Status zurücksetzen.
+  useEffect(() => {
+    setPreview(null);
+    setActiveResize(null);
+    droppedRef.current = false;
+  }, [placements]);
 
   const cols = useMemo(() => buildColumns(mode, anchor), [mode, anchor]);
 
@@ -265,8 +284,31 @@ export function Planner({
     [departments, professionId],
   );
 
+  // Effektive Grenzen inkl. Live-Vorschau.
+  function effKeys(p: Placement) {
+    let vonKey = isoToKey(p.von);
+    let bisKey = isoToKey(p.bis);
+    if (preview && preview.placementId === p.id && cols[preview.colIndex]) {
+      if (preview.edge === "start") vonKey = cols[preview.colIndex].startKey;
+      else bisKey = cols[preview.colIndex].endKey;
+    }
+    return { vonKey, bisKey };
+  }
   function overlapsCol(p: Placement, c: Col) {
-    return isoToKey(p.von) <= c.endKey && isoToKey(p.bis) >= c.startKey;
+    const { vonKey, bisKey } = effKeys(p);
+    return vonKey <= c.endKey && bisKey >= c.startKey;
+  }
+  function clampColIndex(p: Placement, edge: Edge, idx: number) {
+    if (edge === "end") {
+      let startIdx = cols.findIndex((c) => c.endKey >= isoToKey(p.von));
+      if (startIdx < 0) startIdx = cols.length - 1;
+      return Math.max(idx, startIdx);
+    }
+    let endIdx = 0;
+    cols.forEach((c, i) => {
+      if (c.startKey <= isoToKey(p.bis)) endIdx = i;
+    });
+    return Math.min(idx, endIdx);
   }
 
   function changeMode(m: Mode) {
@@ -286,26 +328,21 @@ export function Planner({
   function createInCol(apprenticeId: string, c: Col, departmentId: string) {
     if (!departmentId) return;
     startTransition(async () => {
-      await createPlacement({
-        apprenticeId,
-        departmentId,
-        von: c.vonStr,
-        bis: c.bisStr,
-      });
+      await createPlacement({ apprenticeId, departmentId, von: c.vonStr, bis: c.bisStr });
     });
   }
-  function resizeToCol(placementId: string, edge: "start" | "end", c: Col) {
+  function resizeToCol(placementId: string, edge: Edge, c: Col) {
     const p = placements.find((x) => x.id === placementId);
     if (!p) return;
     if (edge === "start") {
       const bisDate = p.bis.slice(0, 10);
-      const von = c.vonStr > bisDate ? bisDate : c.vonStr; // nicht hinter das Ende
+      const von = c.vonStr > bisDate ? bisDate : c.vonStr;
       startTransition(async () => {
         await updatePlacement({ id: placementId, von });
       });
     } else {
       const vonDate = p.von.slice(0, 10);
-      const bis = c.bisStr < vonDate ? vonDate : c.bisStr; // nicht vor den Start
+      const bis = c.bisStr < vonDate ? vonDate : c.bisStr;
       startTransition(async () => {
         await updatePlacement({ id: placementId, bis });
       });
@@ -329,17 +366,37 @@ export function Planner({
     });
   }
 
+  function startResize(e: DragEvent, placementId: string, edge: Edge) {
+    setPreview(null); // evtl. hängengebliebene Vorschau zurücksetzen
+    setActiveResize({ placementId, edge });
+    e.dataTransfer.setData(
+      "text/plain",
+      JSON.stringify({ type: "resize", placementId, edge }),
+    );
+    e.dataTransfer.effectAllowed = "copy";
+    // Drag-Geist verstecken, damit die Live-Vorschau das Feedback ist.
+    if (dragGhostRef.current) e.dataTransfer.setDragImage(dragGhostRef.current, 0, 0);
+  }
+  function endDrag() {
+    if (!droppedRef.current) setPreview(null);
+    setActiveResize(null);
+    setHoverKey(null);
+    droppedRef.current = false;
+  }
+
   const colMin = mode === "tag" ? 44 : mode === "woche" ? 72 : 0;
   const gridCols = `180px repeat(${cols.length}, minmax(${colMin}px, 1fr))`;
   const innerMinWidth = 180 + cols.length * (colMin || 120);
   const rangeLabel =
     mode === "monat"
-      ? `${MONTH_FMT.format(cols[0] ? addMonths(anchor, 0) : anchor)} – ${MONTH_FMT.format(addMonths(anchor, 2))}`
-      : `${RANGE_FMT.format(anchor)} – ${RANGE_FMT.format(addDays(anchor, mode === "woche" ? 8 * 7 - 1 : 13))}`;
+      ? `${MONTH_FMT.format(anchor)} – ${MONTH_FMT.format(addMonths(anchor, 2))}`
+      : `${RANGE_FMT.format(anchor)} – ${RANGE_FMT.format(addDays(anchor, mode === "woche" ? 55 : 13))}`;
 
   return (
     <div className={cn(isPending && "pointer-events-none opacity-70")}>
-      {/* Filter + Ansicht */}
+      {/* unsichtbarer Drag-Geist */}
+      <span ref={dragGhostRef} className="pointer-events-none fixed -left-[9999px] top-0 size-0" />
+
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="grid gap-1 text-xs text-muted-foreground">
           Beruf
@@ -392,9 +449,7 @@ export function Planner({
             <Button type="button" variant="outline" size="sm" onClick={() => shift(-1)}>
               ‹
             </Button>
-            <span className="min-w-44 text-center text-sm font-medium">
-              {rangeLabel}
-            </span>
+            <span className="min-w-44 text-center text-sm font-medium">{rangeLabel}</span>
             <Button type="button" variant="outline" size="sm" onClick={() => shift(1)}>
               ›
             </Button>
@@ -403,7 +458,6 @@ export function Planner({
       </div>
 
       <div className="flex flex-col gap-4 xl:flex-row">
-        {/* Planer-Raster */}
         <Card className="flex-1 overflow-hidden">
           <CardContent className="overflow-x-auto">
             <div style={{ minWidth: innerMinWidth }}>
@@ -460,14 +514,36 @@ export function Planner({
                           onDragOver={(e) => {
                             e.preventDefault();
                             e.dataTransfer.dropEffect = "copy";
+                            if (activeResize) {
+                              const p = placements.find(
+                                (x) => x.id === activeResize.placementId,
+                              );
+                              if (p && p.apprenticeId === a.id) {
+                                const ci = clampColIndex(p, activeResize.edge, idx);
+                                setPreview((prev) =>
+                                  prev &&
+                                  prev.placementId === activeResize.placementId &&
+                                  prev.edge === activeResize.edge &&
+                                  prev.colIndex === ci
+                                    ? prev
+                                    : {
+                                        placementId: activeResize.placementId,
+                                        edge: activeResize.edge,
+                                        colIndex: ci,
+                                      },
+                                );
+                              }
+                            } else {
+                              setHoverKey((k) => (k === cellKey ? k : cellKey));
+                            }
                           }}
-                          onDragEnter={() => setHoverKey(cellKey)}
                           onDragLeave={() =>
                             setHoverKey((k) => (k === cellKey ? null : k))
                           }
                           onDrop={(e) => {
                             e.preventDefault();
                             setHoverKey(null);
+                            droppedRef.current = true;
                             onCellDrop(a.id, c, e.dataTransfer.getData("text/plain"));
                           }}
                           className={cn(
@@ -481,7 +557,9 @@ export function Planner({
                             const isEnd = !(
                               idx < cols.length - 1 && overlapsCol(p, cols[idx + 1])
                             );
-                            const barColor = BAR_CLASS[colorOf[p.departmentId]] ?? BAR_CLASS.indigo;
+                            const barColor =
+                              BAR_CLASS[colorOf[p.departmentId]] ?? BAR_CLASS.indigo;
+                            const resizing = preview?.placementId === p.id;
                             return (
                               <div
                                 key={p.id}
@@ -490,6 +568,7 @@ export function Planner({
                                   barColor,
                                   isStart && "rounded-l-md",
                                   isEnd && "rounded-r-md",
+                                  resizing && "ring-2 ring-foreground/30",
                                 )}
                               >
                                 {isStart && (
@@ -510,17 +589,8 @@ export function Planner({
                                 {isStart && (
                                   <span
                                     draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData(
-                                        "text/plain",
-                                        JSON.stringify({
-                                          type: "resize",
-                                          placementId: p.id,
-                                          edge: "start",
-                                        }),
-                                      );
-                                      e.dataTransfer.effectAllowed = "copy";
-                                    }}
+                                    onDragStart={(e) => startResize(e, p.id, "start")}
+                                    onDragEnd={endDrag}
                                     title="Anfang ziehen"
                                     className="absolute left-0 top-0 h-full w-2 cursor-ew-resize rounded-l-md bg-black/10 hover:bg-black/30 dark:bg-white/15 dark:hover:bg-white/40"
                                   />
@@ -528,17 +598,8 @@ export function Planner({
                                 {isEnd && (
                                   <span
                                     draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData(
-                                        "text/plain",
-                                        JSON.stringify({
-                                          type: "resize",
-                                          placementId: p.id,
-                                          edge: "end",
-                                        }),
-                                      );
-                                      e.dataTransfer.effectAllowed = "copy";
-                                    }}
+                                    onDragStart={(e) => startResize(e, p.id, "end")}
+                                    onDragEnd={endDrag}
                                     title="Ende ziehen"
                                     className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md bg-black/10 hover:bg-black/30 dark:bg-white/15 dark:hover:bg-white/40"
                                   />
@@ -556,7 +617,6 @@ export function Planner({
           </CardContent>
         </Card>
 
-        {/* Abteilungs-Palette */}
         <Card className="xl:w-64 xl:shrink-0">
           <CardHeader>
             <CardTitle>Geeignete Abteilungen</CardTitle>
@@ -572,12 +632,15 @@ export function Planner({
                   key={dep.id}
                   draggable
                   onDragStart={(e) => {
+                    setActiveResize(null);
+                    setPreview(null);
                     e.dataTransfer.setData(
                       "text/plain",
                       JSON.stringify({ type: "new", departmentId: dep.id }),
                     );
                     e.dataTransfer.effectAllowed = "copy";
                   }}
+                  onDragEnd={endDrag}
                   className="flex cursor-grab items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-xs hover:bg-muted active:cursor-grabbing"
                 >
                   <span
@@ -593,7 +656,7 @@ export function Planner({
             <p className="pt-2 text-xs text-muted-foreground">
               Abteilung auf eine Spalte ziehen, um einen Einsatz anzulegen
               (1&nbsp;{mode === "monat" ? "Monat" : mode === "woche" ? "Woche" : "Tag"}).
-              Enden ziehen verlängert/verkürzt.
+              Enden ziehen verlängert/verkürzt — die Vorschau läuft live mit.
             </p>
           </CardContent>
         </Card>

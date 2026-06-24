@@ -23,15 +23,27 @@ admin@demo.de (Admin), ausbilder@demo.de, beauftragter@demo.de, azubi@demo.de.
 
 Umgesetzt: **App-Shell** mit rollenabhängiger Sidebar (Route-Gruppe `src/app/(app)`) +
 rollenabhängigem Dashboard, **Login** (Auth.js v5, E-Mail + Passwort; Session trägt
-`tenantId` + `role` → Mandantentrennung in der App-Schicht), Azubi-Verwaltung
-(anlegen/auflisten/Soft-Delete) und der **visuelle Einsatzplaner** (`einsatzplanung/`):
-Filter nach Beruf/Ausbildungsjahr, Azubis zeilenweise, Ansichten **Monat/Woche/Tag**,
-Einsätze per **Drag & Drop** anlegen und Enden live ziehen; Abteilungen haben Farben und
-eine **Eignung je Beruf** (Modell `DepartmentProfession`). Navigations-Mapping (Rolle →
-Reiter): `src/app/(app)/_components/nav.ts`. Setup/Onboarding: **[README.md](README.md)**.
+`tenantId` + `role` → Mandantentrennung in der App-Schicht) und **Maerix-Branding**
+(Logo/Bildmarke/Favicon). Navigations-Mapping (Rolle → Reiter):
+`src/app/(app)/_components/nav.ts`. Setup/Onboarding: **[README.md](README.md)**.
+
+Funktionsbereiche (Stand 2026-06-23, Details: **[CHANGELOG.md](CHANGELOG.md)**):
+- **Einsatzplaner** (`einsatzplanung/`): Drag & Drop, Ansichten Monat/Woche/Tag,
+  Abteilungsfarben + Eignung je Beruf (`DepartmentProfession`). **Regel-Engine**
+  (`src/lib/planner-rules.ts`): „!" am Block bei Verstoß (Abteilung voll, Berufsschule,
+  Urlaub/Prüfung, gesperrt, Station durchlaufen) — alles überschreibbar.
+- **Ausbilder-Ansicht**: Azubi-Liste (Suche/Filter/Sortierung) + Azubi-Profil mit
+  Stationsbalken (voll/transparent/leer) und Bewertungen. Helfer: `src/lib/ausbildung.ts`.
+- **Azubi-Ansicht** (`meine-seite/`): Wochen-Zeitleiste, Fortschritt, Anstehendes,
+  **Noten** anlegen/auflisten (Modell `Grade`).
+- **Verwaltung** `/sperrzeiten` (Admin/Ausbilder): Berufsschulplan, Urlaub/Prüfung,
+  Abteilungssperren. Neue Modelle: `SchoolBlock`, `AbsenceBlock`, `DepartmentBlock`.
+
+Bewusst zurückgestellt: Ausbilder-Zuteilung („nur meine Azubis"), Zeugnis-Upload,
+„Urlaub beantragen", Benachrichtigungen bei Noteneingabe.
 
 Nächste Schritte: **Row-Level-Security** in PostgreSQL (DB-tiefe Mandantentrennung als
-Absicherung *unter* der App-Schicht), danach Beurteilung & Noten. Offene
+Absicherung *unter* der App-Schicht), danach Beurteilung & echte Noten-Auswertung. Offene
 Modellierungs-Fragen stehen als `TODO (klären)` in `prisma/schema.prisma`.
 
 ## Entschiedener Stack

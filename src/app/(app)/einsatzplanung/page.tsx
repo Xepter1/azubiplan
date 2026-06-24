@@ -8,7 +8,16 @@ export default async function EinsatzplanungPage() {
   const tenant = await getActiveTenant();
   const tid = tenant.id;
 
-  const [apprentices, departments, professions, placements] = await Promise.all([
+  const [
+    apprentices,
+    departments,
+    professions,
+    placements,
+    deptProfessions,
+    schoolBlocks,
+    absenceBlocks,
+    departmentBlocks,
+  ] = await Promise.all([
     prisma.apprentice.findMany({
       where: { tenantId: tid, deletedAt: null },
       select: {
@@ -24,6 +33,7 @@ export default async function EinsatzplanungPage() {
       select: {
         id: true,
         name: true,
+        kapazitaet: true,
         suitableFor: { select: { professionId: true } },
       },
       orderBy: { name: "asc" },
@@ -44,16 +54,45 @@ export default async function EinsatzplanungPage() {
         department: { select: { name: true } },
       },
     }),
+    prisma.departmentProfession.findMany({
+      where: { tenantId: tid },
+      select: { departmentId: true, professionId: true, sollWochen: true },
+    }),
+    prisma.schoolBlock.findMany({
+      where: { tenantId: tid },
+      select: { professionId: true, ausbildungsjahr: true, von: true, bis: true },
+    }),
+    prisma.absenceBlock.findMany({
+      where: { tenantId: tid },
+      select: { apprenticeId: true, typ: true, von: true, bis: true },
+    }),
+    prisma.departmentBlock.findMany({
+      where: { tenantId: tid },
+      select: { departmentId: true, grund: true, von: true, bis: true },
+    }),
   ]);
+
+  const iso = (d: Date) => d.toISOString();
+  const soll: Record<string, number | null> = {};
+  for (const dp of deptProfessions) {
+    soll[`${dp.departmentId}:${dp.professionId}`] = dp.sollWochen;
+  }
 
   return (
     <div className="px-6 py-8">
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight">
-        Einsatzplanung
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary/70">
+        Ausbilder
+      </p>
+      <h1 className="mb-1 text-3xl font-bold tracking-tight">
+        Der Rotationsplaner
       </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Azubis nach Beruf &amp; Ausbildungsjahr filtern und passende Abteilungen
-        per Drag &amp; Drop einplanen.
+      <p className="mb-6 max-w-3xl text-[15px] leading-relaxed text-muted-foreground">
+        Zeilen sind Azubis, Spalten sind Kalenderwochen. Abteilungen rechts per
+        Drag &amp; Drop auf eine Woche ziehen. Verstößt ein Einsatz gegen eine
+        Regel (Abteilung voll, Berufsschule, Urlaub/Prüfung, gesperrt oder
+        Station bereits durchlaufen), erscheint ein{" "}
+        <span className="font-medium text-foreground">!</span> am Block — du kannst
+        ihn aber bewusst trotzdem setzen.
       </p>
 
       <Planner
@@ -67,6 +106,7 @@ export default async function EinsatzplanungPage() {
         departments={departments.map((dep) => ({
           id: dep.id,
           name: dep.name,
+          kapazitaet: dep.kapazitaet,
           professionIds: dep.suitableFor.map((s) => s.professionId),
         }))}
         professions={professions}
@@ -77,6 +117,25 @@ export default async function EinsatzplanungPage() {
           departmentName: p.department.name,
           von: p.von.toISOString(),
           bis: p.bis.toISOString(),
+        }))}
+        soll={soll}
+        schoolBlocks={schoolBlocks.map((s) => ({
+          professionId: s.professionId,
+          ausbildungsjahr: s.ausbildungsjahr,
+          von: iso(s.von),
+          bis: iso(s.bis),
+        }))}
+        absenceBlocks={absenceBlocks.map((a) => ({
+          apprenticeId: a.apprenticeId,
+          typ: a.typ,
+          von: iso(a.von),
+          bis: iso(a.bis),
+        }))}
+        departmentBlocks={departmentBlocks.map((b) => ({
+          departmentId: b.departmentId,
+          grund: b.grund,
+          von: iso(b.von),
+          bis: iso(b.bis),
         }))}
       />
     </div>

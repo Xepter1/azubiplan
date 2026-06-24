@@ -8,7 +8,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import { X } from "lucide-react";
+import { X, AlertTriangle, GripVertical } from "lucide-react";
 
 import {
   Card,
@@ -18,6 +18,16 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  type AbsenceLite,
+  type DeptBlockLite,
+  type RuleContext,
+  type SchoolBlockLite,
+  type Violation,
+  abgeschlosseneWochen,
+  violationsFor,
+  violationsForCandidate,
+} from "@/lib/planner-rules";
 import { createPlacement, deletePlacement, updatePlacement } from "./actions";
 
 type Apprentice = {
@@ -27,8 +37,14 @@ type Apprentice = {
   professionId: string | null;
   start: string; // ISO
 };
-type Department = { id: string; name: string; professionIds: string[] };
+type Department = {
+  id: string;
+  name: string;
+  kapazitaet: number | null;
+  professionIds: string[];
+};
 type Profession = { id: string; bezeichnung: string };
+type Soll = Record<string, number | null>;
 type Placement = {
   id: string;
   apprenticeId: string;
@@ -205,11 +221,19 @@ export function Planner({
   departments,
   professions,
   placements,
+  soll,
+  schoolBlocks,
+  absenceBlocks,
+  departmentBlocks,
 }: {
   apprentices: Apprentice[];
   departments: Department[];
   professions: Profession[];
   placements: Placement[];
+  soll: Soll;
+  schoolBlocks: SchoolBlockLite[];
+  absenceBlocks: AbsenceLite[];
+  departmentBlocks: DeptBlockLite[];
 }) {
   const now = useMemo(() => new Date(), []);
 
@@ -256,8 +280,107 @@ export function Planner({
     colIndex: number;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Bestätigungsdialog beim Ablegen trotz Regelverletzung.
+  const [pendingDrop, setPendingDrop] = useState<{
+    apprenticeId: string;
+    departmentId: string;
+    von: string;
+    bis: string;
+    departmentName: string;
+    violations: Violation[];
+  } | null>(null);
+  // Schwebender Hover-Tooltip (viewport-fix → nicht vom Scroll-Container
+  // abgeschnitten). Für "!"-Hinweise und die Fortschritts-Punkte.
+  const [tip, setTip] = useState<{ x: number; y: number; lines: string[] } | null>(
+    null,
+  );
+  function showTip(e: { currentTarget: HTMLElement }, lines: string[]) {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.left + r.width / 2, y: r.top, lines });
+  }
+  const hideTip = () => setTip(null);
   const droppedRef = useRef(false);
   const dragGhostRef = useRef<HTMLSpanElement>(null);
+
+  // Zuordnungs-Maps + Regel-Kontext (für "!"-Markierungen und Vorab-Check).
+  const apprenticeProfession = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const a of apprentices) m[a.id] = a.professionId;
+    return m;
+  }, [apprentices]);
+  const apprenticeYear = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const a of apprentices) m[a.id] = ausbildungsjahr(a.start, now);
+    return m;
+  }, [apprentices, now]);
+  const departmentMap = useMemo(() => {
+    const m: Record<string, Department> = {};
+    for (const d of departments) m[d.id] = d;
+    return m;
+  }, [departments]);
+  const ruleCtx: RuleContext = useMemo(
+    () => ({
+      placements: placements.map((p) => ({
+        id: p.id,
+        apprenticeId: p.apprenticeId,
+        departmentId: p.departmentId,
+        von: p.von,
+        bis: p.bis,
+      })),
+      departments: departmentMap,
+      soll,
+      school: schoolBlocks,
+      absence: absenceBlocks,
+      deptBlocks: departmentBlocks,
+      apprenticeProfession,
+      apprenticeYear,
+      today: now.toISOString(),
+    }),
+    [
+      placements,
+      departmentMap,
+      soll,
+      schoolBlocks,
+      absenceBlocks,
+      departmentBlocks,
+      apprenticeProfession,
+      apprenticeYear,
+      now,
+    ],
+  );
+
+  // Regelverletzungen je Einsatz EINMAL berechnen (nicht pro Render/Drag-Frame),
+  // damit das Ziehen flüssig bleibt.
+  const violationsByPlacement = useMemo(() => {
+    const m = new Map<string, Violation[]>();
+    for (const p of placements) m.set(p.id, violationsFor(p, ruleCtx));
+    return m;
+  }, [placements, ruleCtx]);
+
+  // Fortschritts-Punkte je Azubi: voll = Station durchlaufen (Soll abgeschlossen),
+  // matt = begonnen/laufend. Geplante Zukunft ohne abgeschlossene Zeit → kein Punkt.
+  function dotsFor(a: Apprentice) {
+    const prof = a.professionId;
+    if (!prof) return [] as { id: string; full: boolean }[];
+    const today = now.toISOString();
+    const tk = isoToKey(today);
+    return departments
+      .filter((d) => d.professionIds.includes(prof))
+      .sort((x, y) => x.id.localeCompare(y.id))
+      .map((d) => {
+        const own = placements.filter(
+          (p) => p.apprenticeId === a.id && p.departmentId === d.id,
+        );
+        const done = abgeschlosseneWochen(own, a.id, d.id, today);
+        const ongoing = own.some(
+          (p) => isoToKey(p.von) <= tk && tk <= isoToKey(p.bis),
+        );
+        if (done <= 0 && !ongoing) return null; // nur Zukunft → kein Punkt
+        const sw = soll[`${d.id}:${prof}`];
+        return { id: d.id, full: sw != null && done >= sw };
+      })
+      .filter((x): x is { id: string; full: boolean } => x !== null);
+  }
 
   // Nach dem Speichern (neue Daten vom Server) Vorschau/Drag-Status zurücksetzen.
   useEffect(() => {
@@ -298,6 +421,10 @@ export function Planner({
     const { vonKey, bisKey } = effKeys(p);
     return vonKey <= c.endKey && bisKey >= c.startKey;
   }
+  // Überlappung eines Sperr-/Abwesenheits-Zeitraums mit einer Spalte.
+  function blockOverlapsCol(von: string, bis: string, c: Col) {
+    return isoToKey(von) <= c.endKey && isoToKey(bis) >= c.startKey;
+  }
   function clampColIndex(p: Placement, edge: Edge, idx: number) {
     if (edge === "end") {
       let startIdx = cols.findIndex((c) => c.endKey >= isoToKey(p.von));
@@ -325,11 +452,35 @@ export function Planner({
     );
   }
 
+  function persistCreate(
+    apprenticeId: string,
+    departmentId: string,
+    von: string,
+    bis: string,
+  ) {
+    startTransition(async () => {
+      await createPlacement({ apprenticeId, departmentId, von, bis });
+    });
+  }
   function createInCol(apprenticeId: string, c: Col, departmentId: string) {
     if (!departmentId) return;
-    startTransition(async () => {
-      await createPlacement({ apprenticeId, departmentId, von: c.vonStr, bis: c.bisStr });
-    });
+    const violations = violationsForCandidate(
+      { id: "__candidate__", apprenticeId, departmentId, von: c.vonStr, bis: c.bisStr },
+      ruleCtx,
+    );
+    if (violations.length > 0) {
+      // Regel verletzt → erst bestätigen, dann (bewusst) speichern.
+      setPendingDrop({
+        apprenticeId,
+        departmentId,
+        von: c.vonStr,
+        bis: c.bisStr,
+        departmentName: departmentMap[departmentId]?.name ?? "",
+        violations,
+      });
+      return;
+    }
+    persistCreate(apprenticeId, departmentId, c.vonStr, c.bisStr);
   }
   function resizeToCol(placementId: string, edge: Edge, c: Col) {
     const p = placements.find((x) => x.id === placementId);
@@ -457,6 +608,46 @@ export function Planner({
         </div>
       </div>
 
+      {/* Legende */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded bg-indigo-500" />
+          Abteilung — eine Farbe je Abteilung
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-3 w-5 rounded bg-muted"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(45deg, color-mix(in oklch, var(--muted-foreground) 18%, transparent) 0 5px, transparent 5px 10px)",
+            }}
+          />
+          Berufsschule
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded bg-muted/60" />
+          Urlaub
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded bg-indigo-100 dark:bg-indigo-950/60" />
+          Prüfung / Prüfungsvorb.
+        </span>
+        <span className="inline-flex items-center gap-1.5 border-l pl-5">
+          <span className="size-2 rounded-full bg-indigo-500" />
+          voll = Station erledigt
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-indigo-500 opacity-30" />
+          matt = begonnen
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex size-4 items-center justify-center rounded-full bg-amber-400 text-amber-950">
+            <AlertTriangle className="size-2.5" />
+          </span>
+          Regel verletzt (trotzdem speicherbar)
+        </span>
+      </div>
+
       <div className="flex flex-col gap-4 xl:flex-row">
         <Card className="flex-1 overflow-hidden">
           <CardContent className="overflow-x-auto">
@@ -499,8 +690,31 @@ export function Planner({
                       <div className="text-sm font-medium">
                         {a.nachname}, {a.vorname}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {ausbildungsjahr(a.start, now)}. Jahr
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{ausbildungsjahr(a.start, now)}. Jahr</span>
+                        <span className="flex items-center gap-1">
+                          {dotsFor(a).map((d) => {
+                            const depName =
+                              departmentMap[d.id]?.name ?? "Abteilung";
+                            return (
+                              <span
+                                key={d.id}
+                                title={depName}
+                                onMouseEnter={(e) => showTip(e, [depName])}
+                                onMouseLeave={hideTip}
+                                className="-m-1 cursor-default p-1"
+                              >
+                                <span
+                                  className={cn(
+                                    "block size-2 rounded-full",
+                                    DOT_CLASS[colorOf[d.id]] ?? DOT_CLASS.indigo,
+                                    !d.full && "opacity-30",
+                                  )}
+                                />
+                              </span>
+                            );
+                          })}
+                        </span>
                       </div>
                     </div>
                     {cols.map((c, idx) => {
@@ -508,6 +722,42 @@ export function Planner({
                       const cellPlacements = placements.filter(
                         (p) => p.apprenticeId === a.id && overlapsCol(p, c),
                       );
+                      const azYear = apprenticeYear[a.id];
+                      const cellOverlays = [
+                        ...schoolBlocks
+                          .filter(
+                            (s) =>
+                              s.professionId === a.professionId &&
+                              (s.ausbildungsjahr == null ||
+                                s.ausbildungsjahr === azYear) &&
+                              blockOverlapsCol(s.von, s.bis, c),
+                          )
+                          .map((s, i) => ({
+                            key: `bs${i}`,
+                            kind: "bs" as const,
+                            von: s.von,
+                            bis: s.bis,
+                            label: "Berufsschule",
+                            short: "BS",
+                          })),
+                        ...absenceBlocks
+                          .filter(
+                            (b) =>
+                              b.apprenticeId === a.id &&
+                              blockOverlapsCol(b.von, b.bis, c),
+                          )
+                          .map((b, i) => ({
+                            key: `ab${i}`,
+                            kind:
+                              b.typ === "URLAUB"
+                                ? ("urlaub" as const)
+                                : ("pruefung" as const),
+                            von: b.von,
+                            bis: b.bis,
+                            label: b.typ === "URLAUB" ? "Urlaub" : "Prüfung",
+                            short: b.typ === "URLAUB" ? "Urlaub" : "Prüfung",
+                          })),
+                      ];
                       return (
                         <div
                           key={c.key}
@@ -552,6 +802,44 @@ export function Planner({
                             hoverKey === cellKey && "bg-indigo-50 dark:bg-indigo-950/40",
                           )}
                         >
+                          {cellOverlays.map((o) => {
+                            const isStart = !(
+                              idx > 0 && blockOverlapsCol(o.von, o.bis, cols[idx - 1])
+                            );
+                            const isEnd = !(
+                              idx < cols.length - 1 &&
+                              blockOverlapsCol(o.von, o.bis, cols[idx + 1])
+                            );
+                            return (
+                              <div
+                                key={o.key}
+                                title={o.label}
+                                className={cn(
+                                  "flex h-7 items-center overflow-hidden text-xs font-medium",
+                                  isStart && "rounded-l-md",
+                                  isEnd && "rounded-r-md",
+                                  o.kind === "bs" &&
+                                    "bg-muted text-muted-foreground/80",
+                                  o.kind === "urlaub" &&
+                                    "bg-muted/60 text-muted-foreground",
+                                  o.kind === "pruefung" &&
+                                    "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
+                                )}
+                                style={
+                                  o.kind === "bs"
+                                    ? {
+                                        backgroundImage:
+                                          "repeating-linear-gradient(45deg, color-mix(in oklch, var(--muted-foreground) 18%, transparent) 0 5px, transparent 5px 10px)",
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {isStart && (
+                                  <span className="truncate px-2">{o.short}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                           {cellPlacements.map((p) => {
                             const isStart = !(idx > 0 && overlapsCol(p, cols[idx - 1]));
                             const isEnd = !(
@@ -560,6 +848,7 @@ export function Planner({
                             const barColor =
                               BAR_CLASS[colorOf[p.departmentId]] ?? BAR_CLASS.indigo;
                             const resizing = preview?.placementId === p.id;
+                            const vio = violationsByPlacement.get(p.id) ?? [];
                             return (
                               <div
                                 key={p.id}
@@ -569,11 +858,32 @@ export function Planner({
                                   isStart && "rounded-l-md",
                                   isEnd && "rounded-r-md",
                                   resizing && "ring-2 ring-foreground/30",
+                                  vio.length > 0 &&
+                                    "ring-2 ring-amber-500/70 ring-inset",
                                 )}
+                                title={
+                                  vio.length > 0
+                                    ? vio.map((v) => "• " + v.text).join("\n")
+                                    : undefined
+                                }
                               >
                                 {isStart && (
-                                  <span className="truncate px-2 text-xs font-medium">
-                                    {p.departmentName}
+                                  <span className="flex min-w-0 items-center gap-1 px-2">
+                                    {vio.length > 0 && (
+                                      <span
+                                        title={vio.map((v) => "• " + v.text).join("\n")}
+                                        onMouseEnter={(e) =>
+                                          showTip(e, vio.map((v) => v.text))
+                                        }
+                                        onMouseLeave={hideTip}
+                                        className="flex size-4 shrink-0 cursor-default items-center justify-center rounded-full bg-amber-400 text-amber-950 shadow-sm"
+                                      >
+                                        <AlertTriangle className="size-2.5" />
+                                      </span>
+                                    )}
+                                    <span className="truncate text-xs font-medium">
+                                      {p.departmentName}
+                                    </span>
                                   </span>
                                 )}
                                 {isEnd && (
@@ -619,7 +929,10 @@ export function Planner({
 
         <Card className="xl:w-64 xl:shrink-0">
           <CardHeader>
-            <CardTitle>Geeignete Abteilungen</CardTitle>
+            <CardTitle>Abteilungen</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Auf eine Woche ziehen &amp; ablegen
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
             {suitable.length === 0 ? (
@@ -650,6 +963,12 @@ export function Planner({
                     )}
                   />
                   <span className="truncate">{dep.name}</span>
+                  {dep.kapazitaet != null && (
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      max. {dep.kapazitaet}
+                    </span>
+                  )}
+                  <GripVertical className="size-4 shrink-0 text-muted-foreground/50" />
                 </div>
               ))
             )}
@@ -661,6 +980,79 @@ export function Planner({
           </CardContent>
         </Card>
       </div>
+
+      {pendingDrop && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setPendingDrop(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                <AlertTriangle className="size-4" />
+              </span>
+              <h2 className="text-lg font-semibold">Regel verletzt</h2>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {pendingDrop.departmentName}
+              </span>{" "}
+              verstößt hier gegen{" "}
+              {pendingDrop.violations.length === 1
+                ? "eine Regel"
+                : `${pendingDrop.violations.length} Regeln`}
+              :
+            </p>
+            <ul className="mb-5 space-y-1.5">
+              {pendingDrop.violations.map((v, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                >
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  {v.text}
+                </li>
+              ))}
+            </ul>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Du kannst die Zuweisung als bewusste Ausnahme trotzdem speichern.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPendingDrop(null)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const d = pendingDrop;
+                  setPendingDrop(null);
+                  persistCreate(d.apprenticeId, d.departmentId, d.von, d.bis);
+                }}
+              >
+                Trotzdem zuweisen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tip && (
+        <div
+          className="pointer-events-none fixed z-[60] max-w-xs -translate-x-1/2 -translate-y-full rounded-lg bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-lg"
+          style={{ left: tip.x, top: tip.y - 8 }}
+        >
+          {tip.lines.map((l, i) => (
+            <div key={i}>{l}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

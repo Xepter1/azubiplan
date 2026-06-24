@@ -5,6 +5,8 @@ import {
   ClipboardCheck,
   GraduationCap,
   Building2,
+  CalendarX,
+  CircleUser,
   Users,
   Settings,
 } from "lucide-react";
@@ -30,6 +32,12 @@ const ALL: UserRole[] = [
 export const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
   {
+    href: "/meine-seite",
+    label: "Meine Seite",
+    icon: CircleUser,
+    roles: ["AZUBI"],
+  },
+  {
     href: "/einsatzplanung",
     label: "Einsatzplanung",
     icon: CalendarDays,
@@ -51,6 +59,12 @@ export const navItems: NavItem[] = [
     href: "/abteilungen",
     label: "Abteilungen",
     icon: Building2,
+    roles: ["ADMIN", "AUSBILDER"],
+  },
+  {
+    href: "/sperrzeiten",
+    label: "Sperrzeiten",
+    icon: CalendarX,
     roles: ["ADMIN", "AUSBILDER"],
   },
   { href: "/benutzer", label: "Benutzer", icon: Users, roles: ["ADMIN"] },

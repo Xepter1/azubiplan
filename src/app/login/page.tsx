@@ -19,10 +19,16 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/maerix-logo.svg"
+        alt="Maerix"
+        className="mb-7 w-48 self-center"
+      />
       <Card>
         <CardHeader>
           <CardTitle>Anmelden</CardTitle>
-          <CardDescription>AzubiPlan · Mandanten-Login</CardDescription>
+          <CardDescription>Ausbildungsplaner · Mandanten-Login</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={action} className="grid gap-4">

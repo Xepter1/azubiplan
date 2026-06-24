@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,14 +26,15 @@ export function Sidebar({
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
-          <GraduationCap className="size-5" />
-        </div>
+      <div className="flex items-center gap-2.5 px-5 py-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/maerix-mark.svg" alt="Maerix" className="size-9" />
         <div className="leading-tight">
-          <div className="text-sm font-semibold">AzubiPlan</div>
+          <div className="text-lg font-bold tracking-tight text-[#0f3c65] dark:text-[#94cdff]">
+            maerix
+          </div>
           <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Planning System
+            Ausbildungsplaner
           </div>
         </div>
       </div>

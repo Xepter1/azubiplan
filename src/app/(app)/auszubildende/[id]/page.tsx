@@ -1,7 +1,7 @@
 import { type CSSProperties } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, Clock, CircleDashed } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,8 +10,10 @@ import {
   ausbildungsdauerJahre,
   ausbildungsjahr,
   bewertungLabel,
+  contentCoverage,
   departmentColorMap,
   stationState,
+  type CoverageState,
   type StationState,
 } from "@/lib/ausbildung";
 
@@ -19,6 +21,11 @@ export const dynamic = "force-dynamic";
 
 const MONTH_FMT = new Intl.DateTimeFormat("de-DE", {
   month: "short",
+  year: "numeric",
+});
+const DAY_FMT = new Intl.DateTimeFormat("de-DE", {
+  day: "2-digit",
+  month: "2-digit",
   year: "numeric",
 });
 
@@ -60,6 +67,7 @@ export default async function AzubiProfilPage({
             departmentId: true,
             von: true,
             bis: true,
+            department: { select: { name: true } },
             evaluation: { select: { bewertung: true } },
           },
         },
@@ -107,6 +115,66 @@ export default async function AzubiProfilPage({
   const dauer = ausbildungsdauerJahre(azubi.start, azubi.ende);
   const initials = `${azubi.vorname[0] ?? ""}${azubi.nachname[0] ?? ""}`.toUpperCase();
 
+  // --- RLP-Abdeckung (Cockpit) ---
+  // Soll-Lerninhalte = vom Beruf benötigte Inhalte. Abgedeckt, sobald der Azubi
+  // in einer Abteilung war/ist, die den Inhalt laut Zuordnung vermittelt.
+  const required = azubi.professionId
+    ? await prisma.requiredContent.findMany({
+        where: { professionId: azubi.professionId, tenantId: tenant.id },
+        select: { learningContent: { select: { id: true, titel: true } } },
+      })
+    : [];
+  const sollContents = required
+    .map((r) => r.learningContent)
+    .sort((a, b) => a.titel.localeCompare(b.titel));
+  const sollIds = sollContents.map((c) => c.id);
+  const azubiDeptIds = Array.from(
+    new Set(azubi.placements.map((p) => p.departmentId)),
+  );
+
+  const taught =
+    sollIds.length && azubiDeptIds.length
+      ? await prisma.taughtContent.findMany({
+          where: {
+            tenantId: tenant.id,
+            learningContentId: { in: sollIds },
+            departmentId: { in: azubiDeptIds },
+          },
+          select: { learningContentId: true, departmentId: true },
+        })
+      : [];
+
+  // learningContentId → Abteilungen (des Azubis), die ihn vermitteln.
+  const teachersOf = new Map<string, Set<string>>();
+  for (const tc of taught) {
+    const set = teachersOf.get(tc.learningContentId) ?? new Set<string>();
+    set.add(tc.departmentId);
+    teachersOf.set(tc.learningContentId, set);
+  }
+
+  const coverage = sollContents.map((c) => {
+    const deptSet = teachersOf.get(c.id);
+    const candidates = deptSet
+      ? azubi.placements
+          .filter((p) => deptSet.has(p.departmentId))
+          .map((p) => ({
+            von: p.von,
+            bis: p.bis,
+            departmentName: p.department?.name ?? "—",
+          }))
+      : [];
+    return { id: c.id, titel: c.titel, ...contentCoverage(candidates, now) };
+  });
+
+  const abgedeckt = coverage.filter(
+    (c) => c.state === "erledigt" || c.state === "laeuft",
+  );
+  const eingeplant = coverage.filter((c) => c.state === "geplant");
+  const fehlt = coverage.filter((c) => c.state === "offen");
+  const quote = sollContents.length
+    ? Math.round((abgedeckt.length / sollContents.length) * 100)
+    : 0;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <Link
@@ -152,6 +220,10 @@ export default async function AzubiProfilPage({
             <Row
               label="Stationen"
               value={`${erledigt} / ${stations.length} erledigt`}
+            />
+            <Row
+              label="Lerninhalte"
+              value={`${abgedeckt.length} / ${sollContents.length} abgedeckt`}
             />
           </dl>
         </div>
@@ -203,6 +275,136 @@ export default async function AzubiProfilPage({
           </p>
         </div>
       </div>
+
+      {/* RLP-Abdeckung (Cockpit) */}
+      <section className="mt-6 rounded-2xl border bg-card p-6 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Ausbildungsrahmenplan
+            </p>
+            <h2 className="text-lg font-bold">Abdeckung der Lerninhalte</h2>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold leading-none">
+              {abgedeckt.length}
+              <span className="text-base font-medium text-muted-foreground">
+                /{sollContents.length}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">abgedeckt</p>
+          </div>
+        </div>
+
+        {/* Fortschrittsbalken */}
+        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all"
+            style={{ width: `${quote}%` }}
+          />
+        </div>
+
+        {sollContents.length === 0 ? (
+          <p className="mt-6 text-sm text-muted-foreground">
+            Für{" "}
+            {azubi.profession?.bezeichnung ?? "diesen Beruf"} sind noch keine
+            Lerninhalte hinterlegt.{" "}
+            {azubi.professionId && (
+              <Link
+                href={`/berufe/${azubi.professionId}`}
+                className="font-medium text-primary hover:underline"
+              >
+                Jetzt Lerninhalte anlegen →
+              </Link>
+            )}
+          </p>
+        ) : (
+          <div className="mt-6 grid gap-x-8 gap-y-6 md:grid-cols-2">
+            <CoverageGroup
+              title="Abgedeckt"
+              state="erledigt"
+              items={abgedeckt}
+            />
+            <CoverageGroup
+              title="Fehlt noch"
+              state="offen"
+              items={fehlt}
+            />
+            <CoverageGroup
+              title="Eingeplant"
+              state="geplant"
+              items={eingeplant}
+            />
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+type CoverageItem = {
+  id: string;
+  titel: string;
+  state: CoverageState;
+  von: Date | null;
+  bis: Date | null;
+  departmentName: string | null;
+};
+
+// Hinweistext „wann & wo" je Lerninhalt.
+function coverageHint(c: CoverageItem): string {
+  if (c.state === "laeuft") {
+    return `läuft gerade · ${c.departmentName}`;
+  }
+  if (c.state === "erledigt" && c.von && c.bis) {
+    return `${DAY_FMT.format(c.von)} – ${DAY_FMT.format(c.bis)} · ${c.departmentName}`;
+  }
+  if (c.state === "geplant" && c.von) {
+    return `ab ${DAY_FMT.format(c.von)} · ${c.departmentName}`;
+  }
+  return "keiner Abteilung in der Rotation";
+}
+
+function CoverageGroup({
+  title,
+  state,
+  items,
+}: {
+  title: string;
+  state: CoverageState;
+  items: CoverageItem[];
+}) {
+  if (items.length === 0) return null;
+
+  const tone =
+    state === "offen"
+      ? { dot: "bg-rose-500", icon: CircleDashed, color: "text-rose-500" }
+      : state === "geplant"
+        ? { dot: "bg-amber-500", icon: Clock, color: "text-amber-500" }
+        : { dot: "bg-emerald-500", icon: Check, color: "text-emerald-600" };
+  const Icon = tone.icon;
+
+  return (
+    <div>
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className={`size-2 rounded-full ${tone.dot}`} />
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="text-xs text-muted-foreground">{items.length}</span>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-start gap-2.5 rounded-xl border bg-background px-3 py-2"
+          >
+            <Icon className={`mt-0.5 size-4 shrink-0 ${tone.color}`} />
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-snug">{c.titel}</p>
+              <p className="text-xs text-muted-foreground">{coverageHint(c)}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

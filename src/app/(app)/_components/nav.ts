@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   GraduationCap,
+  Briefcase,
   Building2,
   CalendarX,
   CircleUser,
@@ -54,6 +55,12 @@ export const navItems: NavItem[] = [
     label: "Auszubildende",
     icon: GraduationCap,
     roles: ["ADMIN", "AUSBILDER", "AUSBILDUNGSBEAUFTRAGTER"],
+  },
+  {
+    href: "/berufe",
+    label: "Berufe",
+    icon: Briefcase,
+    roles: ["ADMIN", "AUSBILDER"],
   },
   {
     href: "/abteilungen",

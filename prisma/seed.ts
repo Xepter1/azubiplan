@@ -66,6 +66,143 @@ async function main() {
     ],
   });
 
+  // --- Lerninhalte (Kenntnisse/Fähigkeiten/Fertigkeiten aus dem Rahmenlehrplan) ---
+  // Eindeutige Titel anlegen; geteilte Inhalte (z. B. „Schaltpläne lesen“ bei
+  // Mechatroniker + Elektroniker) entstehen nur einmal und werden mehrfach
+  // referenziert.
+  const required: { profId: string; titles: string[] }[] = [
+    {
+      profId: fiae.id,
+      titles: [
+        "Software analysieren und entwerfen",
+        "Anwendungen programmieren",
+        "Datenbanken anbinden",
+        "IT-Systeme administrieren",
+        "Netzwerke einrichten",
+        "IT-Sicherheit & Datenschutz",
+        "Qualitätssicherung & Testing",
+        "Projektmanagement",
+      ],
+    },
+    {
+      profId: industrie.id,
+      titles: [
+        "Auftragsbearbeitung",
+        "Kundenkommunikation",
+        "Beschaffung & Einkauf",
+        "Angebote kalkulieren",
+        "Projektmanagement",
+      ],
+    },
+    {
+      profId: mecha.id,
+      titles: [
+        "Mechanische Teile fertigen",
+        "Baugruppen montieren",
+        "Elektrische Komponenten verdrahten",
+        "Schaltpläne lesen und anwenden",
+        "Steuerungstechnik (SPS) programmieren",
+        "Pneumatik & Hydraulik",
+        "Qualitätsprüfung durchführen",
+        "Projektmanagement",
+      ],
+    },
+    {
+      profId: elektro.id,
+      titles: [
+        "Elektrische Installationen",
+        "Schaltpläne lesen und anwenden",
+        "Baugruppen montieren",
+        "Messtechnik anwenden",
+        "IT-Systeme administrieren",
+      ],
+    },
+  ];
+  const taught: { deptId: string; titles: string[] }[] = [
+    {
+      deptId: swe.id,
+      titles: [
+        "Software analysieren und entwerfen",
+        "Anwendungen programmieren",
+        "Datenbanken anbinden",
+      ],
+    },
+    {
+      deptId: itsys.id,
+      titles: [
+        "IT-Systeme administrieren",
+        "Netzwerke einrichten",
+        "IT-Sicherheit & Datenschutz",
+      ],
+    },
+    { deptId: kundenservice.id, titles: ["Auftragsbearbeitung", "Kundenkommunikation"] },
+    { deptId: einkauf.id, titles: ["Beschaffung & Einkauf", "Angebote kalkulieren"] },
+    {
+      deptId: fertigung.id,
+      titles: [
+        "Mechanische Teile fertigen",
+        "Schaltpläne lesen und anwenden",
+        "Pneumatik & Hydraulik",
+      ],
+    },
+    {
+      deptId: montage.id,
+      titles: ["Baugruppen montieren", "Steuerungstechnik (SPS) programmieren"],
+    },
+    {
+      deptId: elektrowerkstatt.id,
+      titles: [
+        "Elektrische Komponenten verdrahten",
+        "Schaltpläne lesen und anwenden",
+        "Elektrische Installationen",
+        "Messtechnik anwenden",
+      ],
+    },
+    {
+      deptId: qs.id,
+      titles: ["Qualitätssicherung & Testing", "Qualitätsprüfung durchführen"],
+    },
+  ];
+  // Hinweis: „Projektmanagement“ ist bewusst KEINER Abteilung zugeordnet →
+  // taucht im Azubi-Cockpit dauerhaft unter „Fehlt noch“ auf.
+
+  const alleTitel = Array.from(
+    new Set([...required, ...taught].flatMap((m) => m.titles)),
+  );
+  await prisma.learningContent.createMany({
+    data: alleTitel.map((titel) => ({ tenantId, titel })),
+  });
+  const contents = await prisma.learningContent.findMany({
+    where: { tenantId },
+    select: { id: true, titel: true },
+  });
+  const cid = (titel: string) => {
+    const c = contents.find((x) => x.titel === titel);
+    if (!c) throw new Error(`Lerninhalt nicht gefunden: ${titel}`);
+    return c.id;
+  };
+
+  await prisma.requiredContent.createMany({
+    data: required.flatMap((m) =>
+      m.titles.map((t) => ({
+        tenantId,
+        professionId: m.profId,
+        learningContentId: cid(t),
+      })),
+    ),
+    skipDuplicates: true,
+  });
+  await prisma.taughtContent.createMany({
+    data: taught.flatMap((m) =>
+      m.titles.map((t) => ({
+        tenantId,
+        departmentId: m.deptId,
+        learningContentId: cid(t),
+      })),
+    ),
+    skipDuplicates: true,
+  });
+
   // --- Benutzer (ein Login pro Rolle, Passwort: demo1234) ---
   await prisma.user.create({ data: { tenantId, email: "admin@demo.de", name: "Anna Schmidt", role: "ADMIN", passwordHash: pw } });
   await prisma.user.create({ data: { tenantId, email: "ausbilder@demo.de", name: "Max Vogt", role: "AUSBILDER", passwordHash: pw } });
@@ -215,7 +352,8 @@ async function main() {
   });
 
   const azubiCount = await prisma.apprentice.count({ where: { tenantId } });
-  console.log(`✅ Seed fertig: "${tenant.name}" — ${azubiCount} Azubis, 8 Abteilungen, 4 Berufe.`);
+  const lcCount = await prisma.learningContent.count({ where: { tenantId } });
+  console.log(`✅ Seed fertig: "${tenant.name}" — ${azubiCount} Azubis, 8 Abteilungen, 4 Berufe, ${lcCount} Lerninhalte.`);
   console.log("   Logins — Passwort jeweils: demo1234");
   console.log("   • admin@demo.de  • ausbilder@demo.de  • beauftragter@demo.de  • azubi@demo.de");
 }

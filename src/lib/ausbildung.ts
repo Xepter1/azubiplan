@@ -65,6 +65,53 @@ export function stationState(
   return "offen";
 }
 
+// Abdeckung eines einzelnen Lerninhalts (RLP) durch die Rotation des Azubis.
+// "abgedeckt" entsteht, wenn der Azubi in einer Abteilung war/ist, die diesen
+// Inhalt vermittelt. Zusätzlich zum Status wird der relevante Einsatz (Zeitraum
+// + Abteilung) zurückgegeben, damit das Profil "wann & wo" anzeigen kann.
+export type CoverageState = "erledigt" | "laeuft" | "geplant" | "offen";
+
+export type ContentCoverage = {
+  state: CoverageState;
+  von: Date | null;
+  bis: Date | null;
+  departmentName: string | null;
+};
+
+// `candidates` = Einsätze des Azubis in Abteilungen, die den Inhalt vermitteln.
+export function contentCoverage(
+  candidates: { von: Date; bis: Date; departmentName: string }[],
+  now: Date = new Date(),
+): ContentCoverage {
+  const t = todayKey(now);
+  const pick = (p: { von: Date; bis: Date; departmentName: string }): ContentCoverage => ({
+    state: "erledigt",
+    von: p.von,
+    bis: p.bis,
+    departmentName: p.departmentName,
+  });
+
+  // Läuft gerade → schlägt alles (Inhalt wird aktuell vermittelt).
+  const laeuft = candidates.find(
+    (p) => dateKey(p.von) <= t && t <= dateKey(p.bis),
+  );
+  if (laeuft) return { ...pick(laeuft), state: "laeuft" };
+
+  // Jüngster abgeschlossener Einsatz → abgedeckt.
+  const erledigt = candidates
+    .filter((p) => dateKey(p.bis) < t)
+    .sort((a, b) => dateKey(b.bis) - dateKey(a.bis));
+  if (erledigt.length) return pick(erledigt[0]);
+
+  // Sonst: nächster geplanter Einsatz → eingeplant.
+  const geplant = candidates
+    .filter((p) => dateKey(p.von) > t)
+    .sort((a, b) => dateKey(a.von) - dateKey(b.von));
+  if (geplant.length) return { ...pick(geplant[0]), state: "geplant" };
+
+  return { state: "offen", von: null, bis: null, departmentName: null };
+}
+
 // Aktuelles Ausbildungsjahr (1-basiert). Bezugspunkt: Monat/Tag des Starts.
 export function ausbildungsjahr(start: Date, now: Date = new Date()): number {
   let years = now.getFullYear() - start.getUTCFullYear();

@@ -5,6 +5,44 @@ Format lose angelehnt an [Keep a Changelog](https://keepachangelog.com/de/).
 
 ---
 
+## 2026-06-26 — Schulklassen, Fächer & klassenbasierte Noten/Berufsschule
+
+Klassen (= Beruf + Jahrgang) als neue Klammer: Sie bündeln die **Fächer** (für die Noten)
+und die **Berufsschulwochen** — weil sich der Lehrplan von Jahrgang zu Jahrgang ändern
+kann. Anders als bisher ist hier das **Datenmodell erweitert** (neue Migration
+`…_school_classes_subjects`); die lokale Demo-DB wurde dafür einmal frisch aufgesetzt.
+
+### Datenmodell
+- Neue Modelle: `SchoolClass` (Beruf + `jahrgang`), `Subject` (Fach, pro Mandant
+  wiederverwendbar), `ClassSubject` (Klasse ↔ Fach, n:m).
+- `Apprentice.classId` — ein Azubi gehört zu einer Klasse.
+- `Grade.fach` (Freitext) → `Grade.subjectId` (FK auf `Subject`).
+- `SchoolBlock`: `professionId` + `ausbildungsjahr` → `classId` (Berufsschulwoche je Klasse).
+
+### Reiter „Klassen" (Admin/Ausbilder)
+- `/klassen`: Klasse anlegen (Name, Beruf, Jahrgang) mit **„Fächer aus … übernehmen"**
+  (kopiert die Fächerliste einer Vorlage-Klasse — z. B. *Mechatronik 2027* aus *2026*).
+- `/klassen/[id]`: Fächer zuweisen (find-or-create + Chips, Wiederverwendung über Berufe),
+  Berufsschulwochen anlegen/löschen, Azubis der Klasse. Actions in `klassen/actions.ts`.
+
+### Azubi → Klasse + Noten
+- Azubi-Profil: Klasse per Dropdown setzen (nur Klassen des passenden Berufs).
+- „Meine Seite": Noten-Eingabe als **Dropdown der Klassen-Fächer** statt Freitext;
+  `addGrade` prüft serverseitig, dass das Fach zur Klasse des Azubis gehört.
+
+### Berufsschulwochen klassenbasiert (Planer + Sperrzeiten)
+- Regel-Engine (`planner-rules.ts`): Die Berufsschul-Regel matcht über `apprenticeClass`
+  statt Beruf + Lehrjahr; `planner.tsx` / `einsatzplanung/page.tsx` reichen `classId` durch.
+- Der Berufsschulplan ist aus `/sperrzeiten` in die Klassen-Ansicht gezogen; Sperrzeiten
+  behält Urlaub/Prüfung + Abteilungssperren.
+
+### Seed
+- 7 Klassen (u. a. *Fachinformatik 2023/2024/2025* — 2025 mit Extra-Fach „KI & Data
+  Science" als Demo für den Jahrgangs-Unterschied), 13 Fächer; Azubis zugeordnet,
+  Noten auf Fächer, Berufsschulwochen an Klassen.
+
+---
+
 ## 2026-06-26 — Berufe & Lerninhalte, Abteilungs-Zuordnung, RLP-Abdeckung
 
 Das **Killer-Feature** aus ARCHITECTURE.md §6 steht: Pflicht-Lerninhalte je Beruf

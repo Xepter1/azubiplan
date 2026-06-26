@@ -7,8 +7,9 @@ Ausbilder:innen behalten den Überblick, ob alle Pflicht-Lerninhalte abgedeckt s
 > **Stand:** MVP in Arbeit. Es laufen bereits: Login mit Rollen, App-Shell mit
 > rollenabhängiger Navigation, Azubi-Verwaltung, der visuelle **Einsatzplaner**
 > (Drag & Drop, Ansichten Monat/Woche/Tag), die **Stammdaten-Pflege** (Berufe +
-> Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung) und der **RLP-Abdeckungs-Check**
-> im Azubi-Profil (was ist abgedeckt, was fehlt).
+> Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung, **Schulklassen** mit Fächern &
+> Berufsschulwochen), der **RLP-Abdeckungs-Check** im Azubi-Profil und **Noten je
+> Klassen-Fach** (der Azubi sieht nur die Fächer seiner Klasse).
 >
 > Das große Bild (Stack-Entscheidungen, Datenmodell, DSGVO, Roadmap):
 > **[ARCHITECTURE.md](ARCHITECTURE.md)** · Schnell-Kontext für KI-Sitzungen: **[CLAUDE.md](CLAUDE.md)**
@@ -56,7 +57,7 @@ App öffnen: **http://localhost:3000**
 | E-Mail | Rolle | sieht … |
 |---|---|---|
 | `admin@demo.de` | Administrator | alles |
-| `ausbilder@demo.de` | Ausbilder:in | Planung, Azubis, Berufe, Abteilungen |
+| `ausbilder@demo.de` | Ausbilder:in | Planung, Azubis, Berufe, Klassen, Abteilungen |
 | `beauftragter@demo.de` | Ausbildungsbeauftragte:r | Beurteilungen, Azubis |
 | `azubi@demo.de` | Auszubildende:r | nur Dashboard + Beurteilungen |
 
@@ -87,6 +88,7 @@ src/
       dashboard/          # rollenabhängiges Dashboard
       auszubildende/      # Azubi-Liste + Profil (Stationen + RLP-Abdeckungs-Cockpit)
       berufe/             # Berufe + Lerninhalte (Kenntnisse/Fähigkeiten/Fertigkeiten)
+      klassen/            # Schulklassen (Beruf + Jahrgang): Fächer + Berufsschulwochen
       abteilungen/        # Abteilungen + Lerninhalt-Zuordnung (Drag & Drop)
       einsatzplanung/     # visueller Planer (Drag & Drop) + Server-Actions
       sperrzeiten/ meine-seite/ benutzer/ beurteilungen/ einstellungen/

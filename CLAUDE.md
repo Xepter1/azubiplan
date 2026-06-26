@@ -36,14 +36,18 @@ Funktionsbereiche (Stand 2026-06-26, Details: **[CHANGELOG.md](CHANGELOG.md)**):
   (Kenntnisse/Fähigkeiten/Fertigkeiten) pflegen (`RequiredContent`). Abteilungen anlegen/
   bearbeiten und ihnen Lerninhalte **per Drag & Drop** zuordnen (`TaughtContent`). Modelle
   `LearningContent`/`RequiredContent`/`TaughtContent` lagen schon, nur die UI ist neu.
+- **Klassen & Schule** (`klassen/`): Schulklasse = Beruf + Jahrgang (`SchoolClass`),
+  bündelt **Fächer** (`Subject`/`ClassSubject`, mit „Fächer aus anderer Klasse übernehmen")
+  und **Berufsschulwochen** (`SchoolBlock` hängt jetzt an der Klasse, nicht mehr am Beruf).
+  Azubis werden im Profil einer Klasse zugeordnet (`Apprentice.classId`).
 - **Ausbilder-Ansicht**: Azubi-Liste (Suche/Filter/Sortierung) + Azubi-Profil mit
   Stationsbalken (voll/transparent/leer), Bewertungen und **RLP-Abdeckungs-Cockpit**
   (je Pflicht-Lerninhalt: abgedeckt mit Zeitraum & Abteilung / eingeplant / fehlt —
   abgeleitet aus den Einsätzen). Helfer: `src/lib/ausbildung.ts` (`contentCoverage`).
 - **Azubi-Ansicht** (`meine-seite/`): Wochen-Zeitleiste, Fortschritt, Anstehendes,
-  **Noten** anlegen/auflisten (Modell `Grade`).
-- **Verwaltung** `/sperrzeiten` (Admin/Ausbilder): Berufsschulplan, Urlaub/Prüfung,
-  Abteilungssperren. Neue Modelle: `SchoolBlock`, `AbsenceBlock`, `DepartmentBlock`.
+  **Noten** — der Azubi wählt nur aus den **Fächern seiner Klasse** (`Grade.subjectId`).
+- **Verwaltung** `/sperrzeiten` (Admin/Ausbilder): Urlaub/Prüfung + Abteilungssperren
+  (`AbsenceBlock`, `DepartmentBlock`). Der Berufsschulplan ist zu den **Klassen** gezogen.
 
 Bewusst zurückgestellt: Ausbilder-Zuteilung („nur meine Azubis"), Zeugnis-Upload,
 „Urlaub beantragen", Benachrichtigungen bei Noteneingabe. Bei den Lerninhalten:

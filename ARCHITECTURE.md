@@ -175,6 +175,12 @@ Was fehlt, ist die **Lücke**, die der Ausbilder schließen muss.
 > (Login) und `DEPARTMENT_PROFESSION` als **Eignung** — welche Abteilung für welchen
 > Beruf als Einsatzort infrage kommt (steuert den Planer).
 
+> **Erweiterung (2026-06-26) — Schulklassen:** `SCHOOL_CLASS` (Beruf + `jahrgang`)
+> bündelt die Schul-Seite, weil sich der Lehrplan je Jahrgang ändern kann. Daran hängen
+> `SUBJECT` (Fach, via `CLASS_SUBJECT` n:m) und `SCHOOL_BLOCK` (Berufsschulwoche — jetzt
+> je Klasse statt je Beruf/Lehrjahr). `APPRENTICE` trägt `class_id`, und `GRADE` verweist
+> auf `subject_id` (statt Freitext) — der Azubi benotet nur Fächer seiner Klasse.
+
 ---
 
 ## 7. Datenschutz / DSGVO (von Tag 1)
@@ -224,12 +230,14 @@ Wir sind rechtlich **Auftragsverarbeiter** für unsere Kunden.
 Das Prisma-Schema (Abschnitt 6) ist umgesetzt und migriert. Es laufen: **Login mit
 Rollen**, App-Shell mit rollenabhängiger Navigation, **Azubi-Verwaltung**, der visuelle
 **Einsatzplaner** (Drag & Drop, Ansichten Monat/Woche/Tag, Abteilungs-Eignung je Beruf),
-die **Stammdaten-Pflege** (Berufe + Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung)
-und der **Abdeckungs-Check** als RLP-Cockpit im Azubi-Profil. Stand im Detail:
+die **Stammdaten-Pflege** (Berufe + Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung,
+**Schulklassen** mit Fächern & Berufsschulwochen), der **Abdeckungs-Check** als RLP-Cockpit
+im Azubi-Profil und **Noten je Klassen-Fach**. Stand im Detail:
 **[README.md](README.md)** / **[CLAUDE.md](CLAUDE.md)**.
 
 Nächste Bausteine:
 1. **Row-Level-Security** in PostgreSQL — DB-tiefe Mandantentrennung *unter* der App-Schicht.
-2. **Beurteilungen & Noten** ausbauen — echte Auswertung statt Platzhalter-Notenspiegel.
+2. **Beurteilungen & Noten-Auswertung** — Notenspiegel im Profil (Schnitt je Fach/Halbjahr)
+   statt Platzhalter; Beurteilungen je Einsatz ausbauen.
 3. Lerninhalte verfeinern: Typen (Kenntnis/Fähigkeit/Fertigkeit), Soll-Stunden je Inhalt
    und **Rahmenplan-Vorlagen** je Beruf seeden (vgl. §8 Punkt 5).

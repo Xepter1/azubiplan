@@ -35,6 +35,7 @@ type Apprentice = {
   vorname: string;
   nachname: string;
   professionId: string | null;
+  classId: string | null;
   start: string; // ISO
 };
 type Department = {
@@ -308,11 +309,11 @@ export function Planner({
     for (const a of apprentices) m[a.id] = a.professionId;
     return m;
   }, [apprentices]);
-  const apprenticeYear = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const a of apprentices) m[a.id] = ausbildungsjahr(a.start, now);
+  const apprenticeClass = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const a of apprentices) m[a.id] = a.classId;
     return m;
-  }, [apprentices, now]);
+  }, [apprentices]);
   const departmentMap = useMemo(() => {
     const m: Record<string, Department> = {};
     for (const d of departments) m[d.id] = d;
@@ -333,7 +334,7 @@ export function Planner({
       absence: absenceBlocks,
       deptBlocks: departmentBlocks,
       apprenticeProfession,
-      apprenticeYear,
+      apprenticeClass,
       today: now.toISOString(),
     }),
     [
@@ -344,7 +345,7 @@ export function Planner({
       absenceBlocks,
       departmentBlocks,
       apprenticeProfession,
-      apprenticeYear,
+      apprenticeClass,
       now,
     ],
   );
@@ -722,14 +723,11 @@ export function Planner({
                       const cellPlacements = placements.filter(
                         (p) => p.apprenticeId === a.id && overlapsCol(p, c),
                       );
-                      const azYear = apprenticeYear[a.id];
                       const cellOverlays = [
                         ...schoolBlocks
                           .filter(
                             (s) =>
-                              s.professionId === a.professionId &&
-                              (s.ausbildungsjahr == null ||
-                                s.ausbildungsjahr === azYear) &&
+                              s.classId === a.classId &&
                               blockOverlapsCol(s.von, s.bis, c),
                           )
                           .map((s, i) => ({

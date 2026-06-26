@@ -16,15 +16,16 @@ async function getOwnApprentice() {
   return { azubi, tenantId: tenant.id };
 }
 
-// Note hinzufügen (vom Azubi auf seiner eigenen Seite).
+// Note hinzufügen (vom Azubi auf seiner eigenen Seite). Das Fach muss zu seiner
+// Klasse gehören — er kann nur Fächer benoten, die der Ausbilder ihm zugewiesen hat.
 export async function addGrade(formData: FormData) {
   const { azubi, tenantId } = await getOwnApprentice();
 
-  const fach = String(formData.get("fach") ?? "").trim();
+  const subjectId = String(formData.get("subjectId") ?? "");
   const wertRaw = String(formData.get("wert") ?? "").replace(",", ".");
   const datum = String(formData.get("datum") ?? "");
 
-  if (!fach || !wertRaw || !datum) {
+  if (!subjectId || !wertRaw || !datum) {
     throw new Error("Bitte Fach, Note und Datum ausfüllen.");
   }
   const wert = Number(wertRaw);
@@ -32,8 +33,22 @@ export async function addGrade(formData: FormData) {
     throw new Error("Die Note muss zwischen 1,0 und 6,0 liegen.");
   }
 
+  if (!azubi.classId) {
+    throw new Error(
+      "Dir ist noch keine Klasse zugeordnet. Bitte wende dich an deinen Ausbilder.",
+    );
+  }
+  // Das Fach muss in der Klasse des Azubis unterrichtet werden.
+  const erlaubt = await prisma.classSubject.findFirst({
+    where: { tenantId, classId: azubi.classId, subjectId },
+    select: { id: true },
+  });
+  if (!erlaubt) {
+    throw new Error("Dieses Fach gehört nicht zu deiner Klasse.");
+  }
+
   await prisma.grade.create({
-    data: { tenantId, apprenticeId: azubi.id, fach, wert, datum: new Date(datum) },
+    data: { tenantId, apprenticeId: azubi.id, subjectId, wert, datum: new Date(datum) },
   });
   // TODO (später): Ausbilder über neue/​geänderte Note benachrichtigen.
   revalidatePath("/meine-seite");

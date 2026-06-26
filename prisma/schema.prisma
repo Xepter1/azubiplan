@@ -43,20 +43,23 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users            User[]
-  apprentices      Apprentice[]
-  departments      Department[]
-  professions      Profession[]
-  learningContents LearningContent[]
-  requiredContents RequiredContent[]
-  taughtContents   TaughtContent[]
-  placements       Placement[]
-  evaluations      Evaluation[]
-  grades           Grade[]
+  users                 User[]
+  apprentices           Apprentice[]
+  departments           Department[]
+  professions           Profession[]
+  learningContents      LearningContent[]
+  requiredContents      RequiredContent[]
+  taughtContents        TaughtContent[]
+  placements            Placement[]
+  evaluations           Evaluation[]
+  grades                Grade[]
   departmentProfessions DepartmentProfession[]
-  schoolBlocks     SchoolBlock[]
-  absenceBlocks    AbsenceBlock[]
-  departmentBlocks DepartmentBlock[]
+  schoolBlocks          SchoolBlock[]
+  absenceBlocks         AbsenceBlock[]
+  departmentBlocks      DepartmentBlock[]
+  schoolClasses         SchoolClass[]
+  subjects              Subject[]
+  classSubjects         ClassSubject[]
 }
 
 /// Login-fähiger Nutzer mit Rolle. Azubis können (optional) einen User-Account haben.
@@ -97,12 +100,12 @@ model Profession {
   tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   bezeichnung String
 
-  apprentices      Apprentice[]
-  requiredContents RequiredContent[]
+  apprentices         Apprentice[]
+  requiredContents    RequiredContent[]
   // Abteilungen, die für diesen Beruf als Einsatzort geeignet sind.
   suitableDepartments DepartmentProfession[]
-  // Berufsschul-Blöcke (Blockunterricht) dieses Berufs.
-  schoolBlocks     SchoolBlock[]
+  // Schulklassen (Jahrgänge) dieses Berufs.
+  schoolClasses       SchoolClass[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -124,12 +127,17 @@ model Apprentice {
   professionId String?     @db.Uuid
   profession   Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
 
+  // Schulklasse (Jahrgang) des Azubis — steuert seine Fächer (Noten) und
+  // Berufsschulwochen. Optional, da nicht jeder Azubi sofort zugeordnet ist.
+  classId String?      @db.Uuid
+  class   SchoolClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+
   // TODO (klären): Azubi-Login — 1:1-Verknüpfung zu einem User-Account (optional).
   userId String? @unique @db.Uuid
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  placements Placement[]
-  grades     Grade[]
+  placements    Placement[]
+  grades        Grade[]
   absenceBlocks AbsenceBlock[]
 
   createdAt DateTime  @default(now())
@@ -138,6 +146,7 @@ model Apprentice {
 
   @@index([tenantId])
   @@index([professionId])
+  @@index([classId])
 }
 
 /// Abteilung, durch die Azubis rotieren. Vermittelt bestimmte Lerninhalte.
@@ -271,9 +280,12 @@ model Grade {
   apprenticeId String     @db.Uuid
   apprentice   Apprentice @relation(fields: [apprenticeId], references: [id], onDelete: Cascade)
 
-  // TODO (klären): Noten-Modell — Fach-Katalog, Skala (1–6?), Berufsschule vs. Betrieb,
-  // Zeitraum/Schuljahr. Aktuell bewusst minimal.
-  fach  String
+  // Fach, auf das sich die Note bezieht. Der Azubi wählt beim Eintragen nur aus
+  // den Fächern seiner Klasse (ClassSubject).
+  subjectId String  @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  // TODO (klären): Skala (1–6?), Berufsschule vs. Betrieb, Zeitraum/Schuljahr.
   wert  Decimal  @db.Decimal(3, 1)
   datum DateTime @db.Date
 
@@ -283,6 +295,7 @@ model Grade {
 
   @@index([tenantId])
   @@index([apprenticeId])
+  @@index([subjectId])
 }
 
 /// Eignung: welche Abteilung kommt für welchen Beruf als Einsatzort infrage.
@@ -306,24 +319,23 @@ model DepartmentProfession {
   @@index([professionId])
 }
 
-/// Berufsschul-Block (Blockunterricht) aus dem Berufsschulplan.
-/// Gilt für Azubis eines Berufs; optional auf ein Ausbildungsjahr eingegrenzt.
+/// Berufsschul-Block (Blockunterricht) einer Schulklasse. Da eine Klasse einem
+/// Beruf + Jahrgang entspricht, sind die Wochen damit pro Jahrgang exakt.
 model SchoolBlock {
-  id           String     @id @default(uuid()) @db.Uuid
-  tenantId     String     @db.Uuid
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  professionId String     @db.Uuid
-  profession   Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+  id       String      @id @default(uuid()) @db.Uuid
+  tenantId String      @db.Uuid
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId  String      @db.Uuid
+  class    SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
 
-  ausbildungsjahr Int? // null = alle Jahrgänge dieses Berufs
-  von             DateTime @db.Date
-  bis             DateTime @db.Date
+  von DateTime @db.Date
+  bis DateTime @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
-  @@index([professionId])
+  @@index([classId])
 }
 
 /// Abwesenheit eines Azubis: Urlaub oder Prüfung(svorbereitung).
@@ -335,8 +347,8 @@ model AbsenceBlock {
   apprentice   Apprentice @relation(fields: [apprenticeId], references: [id], onDelete: Cascade)
 
   typ AbsenceType
-  von DateTime @db.Date
-  bis DateTime @db.Date
+  von DateTime    @db.Date
+  bis DateTime    @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -362,4 +374,62 @@ model DepartmentBlock {
 
   @@index([tenantId])
   @@index([departmentId])
+}
+
+/// Schulklasse = Jahrgang eines Berufs (z. B. „Mechatroniker 2027"). Bündelt die
+/// Fächer (für Noten) und die Berufsschulwochen, weil sich der Lehrplan von
+/// Jahrgang zu Jahrgang unterscheiden kann.
+model SchoolClass {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @db.Uuid
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  professionId String     @db.Uuid
+  profession   Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+  jahrgang     Int // Einschulungsjahr, z. B. 2027
+
+  apprentices   Apprentice[]
+  classSubjects ClassSubject[]
+  schoolBlocks  SchoolBlock[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+  @@index([professionId])
+}
+
+/// Schulfach (z. B. „Steuerungstechnik", „WiSo"). Pro Mandant; in mehreren
+/// Klassen wiederverwendbar (ermöglicht „Fächer aus anderer Klasse übernehmen").
+model Subject {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+
+  classSubjects ClassSubject[]
+  grades        Grade[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+/// Verknüpfung Klasse ↔ Fach: „dieses Fach wird in dieser Klasse unterrichtet".
+model ClassSubject {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  classId   String      @db.Uuid
+  class     SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId String      @db.Uuid
+  subject   Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, subjectId])
+  @@index([tenantId])
+  @@index([subjectId])
 }

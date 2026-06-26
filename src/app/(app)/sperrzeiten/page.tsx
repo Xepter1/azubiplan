@@ -15,10 +15,8 @@ import { getActiveTenant } from "@/lib/tenant";
 import {
   createAbsence,
   createDeptBlock,
-  createSchoolBlock,
   deleteAbsence,
   deleteDeptBlock,
-  deleteSchoolBlock,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -37,57 +35,40 @@ export default async function SperrzeitenPage() {
   const tenant = await getActiveTenant();
   const tid = tenant.id;
 
-  const [professions, apprentices, departments, school, absence, deptBlocks] =
-    await Promise.all([
-      prisma.profession.findMany({
-        where: { tenantId: tid, deletedAt: null },
-        select: { id: true, bezeichnung: true },
-        orderBy: { bezeichnung: "asc" },
-      }),
-      prisma.apprentice.findMany({
-        where: { tenantId: tid, deletedAt: null },
-        select: { id: true, vorname: true, nachname: true },
-        orderBy: [{ nachname: "asc" }, { vorname: "asc" }],
-      }),
-      prisma.department.findMany({
-        where: { tenantId: tid, deletedAt: null },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.schoolBlock.findMany({
-        where: { tenantId: tid },
-        select: {
-          id: true,
-          ausbildungsjahr: true,
-          von: true,
-          bis: true,
-          profession: { select: { bezeichnung: true } },
-        },
-        orderBy: { von: "asc" },
-      }),
-      prisma.absenceBlock.findMany({
-        where: { tenantId: tid },
-        select: {
-          id: true,
-          typ: true,
-          von: true,
-          bis: true,
-          apprentice: { select: { vorname: true, nachname: true } },
-        },
-        orderBy: { von: "asc" },
-      }),
-      prisma.departmentBlock.findMany({
-        where: { tenantId: tid },
-        select: {
-          id: true,
-          grund: true,
-          von: true,
-          bis: true,
-          department: { select: { name: true } },
-        },
-        orderBy: { von: "asc" },
-      }),
-    ]);
+  const [apprentices, departments, absence, deptBlocks] = await Promise.all([
+    prisma.apprentice.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: { id: true, vorname: true, nachname: true },
+      orderBy: [{ nachname: "asc" }, { vorname: "asc" }],
+    }),
+    prisma.department.findMany({
+      where: { tenantId: tid, deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.absenceBlock.findMany({
+      where: { tenantId: tid },
+      select: {
+        id: true,
+        typ: true,
+        von: true,
+        bis: true,
+        apprentice: { select: { vorname: true, nachname: true } },
+      },
+      orderBy: { von: "asc" },
+    }),
+    prisma.departmentBlock.findMany({
+      where: { tenantId: tid },
+      select: {
+        id: true,
+        grund: true,
+        von: true,
+        bis: true,
+        department: { select: { name: true } },
+      },
+      orderBy: { von: "asc" },
+    }),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
@@ -95,73 +76,15 @@ export default async function SperrzeitenPage() {
         Admin
       </p>
       <h1 className="mb-1 text-3xl font-bold tracking-tight">
-        Sperrzeiten &amp; Berufsschulplan
+        Sperrzeiten &amp; Abwesenheiten
       </h1>
       <p className="mb-8 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-        Hier gepflegte Zeiträume erscheinen im Rotationsplaner und lösen die
-        Regel-Hinweise aus. Einsätze lassen sich trotzdem bewusst als Ausnahme
-        anlegen.
+        Urlaub, Prüfungen und Abteilungssperren — hier gepflegte Zeiträume
+        erscheinen im Rotationsplaner und lösen die Regel-Hinweise aus. Den
+        Berufsschulplan pflegst du jetzt je Klasse unter „Klassen“.
       </p>
 
       <div className="space-y-6">
-        {/* Berufsschulplan */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Berufsschulplan</CardTitle>
-            <CardDescription>
-              Blockunterricht je Beruf (optional je Ausbildungsjahr).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form
-              action={createSchoolBlock}
-              className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end"
-            >
-              <div className="grid gap-1.5">
-                <Label htmlFor="sb-prof">Beruf</Label>
-                <select id="sb-prof" name="professionId" className={selectCls} required>
-                  {professions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.bezeichnung}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="sb-jahr">Jahr</Label>
-                <select id="sb-jahr" name="ausbildungsjahr" className={selectCls}>
-                  <option value="">alle</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="sb-von">Von</Label>
-                <Input id="sb-von" name="von" type="date" required />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="sb-bis">Bis</Label>
-                <Input id="sb-bis" name="bis" type="date" required />
-              </div>
-              <Button type="submit">Hinzufügen</Button>
-            </form>
-
-            <BlockList
-              empty="Noch keine Berufsschulwochen."
-              rows={school.map((s) => ({
-                id: s.id,
-                title: s.profession?.bezeichnung ?? "—",
-                sub: s.ausbildungsjahr ? `${s.ausbildungsjahr}. Jahr` : "alle Jahre",
-                von: s.von,
-                bis: s.bis,
-              }))}
-              action={deleteSchoolBlock}
-            />
-          </CardContent>
-        </Card>
-
         {/* Urlaub & Prüfung */}
         <Card>
           <CardHeader>

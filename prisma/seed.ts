@@ -203,6 +203,66 @@ async function main() {
     skipDuplicates: true,
   });
 
+  // --- Schulfächer (pro Mandant, in mehreren Klassen wiederverwendbar) ---
+  const subjectNames = [
+    "Programmierung",
+    "Datenbanken",
+    "IT-Systeme",
+    "KI & Data Science",
+    "Geschäftsprozesse",
+    "Rechnungswesen",
+    "Steuerungstechnik",
+    "Mechanik",
+    "Automatisierung",
+    "Messtechnik",
+    "Elektrotechnik",
+    "Wirtschaft & Soziales",
+    "Englisch",
+  ];
+  await prisma.subject.createMany({
+    data: subjectNames.map((name) => ({ tenantId, name })),
+  });
+  const subjects = await prisma.subject.findMany({
+    where: { tenantId },
+    select: { id: true, name: true },
+  });
+  const sid = (name: string) => {
+    const s = subjects.find((x) => x.name === name);
+    if (!s) throw new Error(`Fach nicht gefunden: ${name}`);
+    return s.id;
+  };
+
+  // --- Klassen (Jahrgänge) + ihre Fächer ---
+  async function makeClass(
+    name: string,
+    professionId: string,
+    jahrgang: number,
+    faecher: string[],
+  ) {
+    const cls = await prisma.schoolClass.create({
+      data: { tenantId, name, professionId, jahrgang },
+    });
+    await prisma.classSubject.createMany({
+      data: faecher.map((f) => ({ tenantId, classId: cls.id, subjectId: sid(f) })),
+    });
+    return cls;
+  }
+
+  const fiaeFaecher = ["Programmierung", "Datenbanken", "IT-Systeme", "Wirtschaft & Soziales", "Englisch"];
+  const mechaFaecher = ["Steuerungstechnik", "Elektrotechnik", "Mechanik", "Wirtschaft & Soziales", "Englisch"];
+  const elektroFaecher = ["Elektrotechnik", "Messtechnik", "Automatisierung", "Wirtschaft & Soziales", "Englisch"];
+  const industrieFaecher = ["Geschäftsprozesse", "Rechnungswesen", "Wirtschaft & Soziales", "Englisch"];
+
+  const klasseFiae2023 = await makeClass("Fachinformatik 2023", fiae.id, 2023, fiaeFaecher);
+  const klasseFiae2024 = await makeClass("Fachinformatik 2024", fiae.id, 2024, fiaeFaecher);
+  // 2025: Lehrplan um „KI & Data Science" erweitert — zeigt, warum Klassen je
+  // Jahrgang nötig sind (die Fächer ändern sich von Jahrgang zu Jahrgang).
+  const klasseFiae2025 = await makeClass("Fachinformatik 2025", fiae.id, 2025, [...fiaeFaecher, "KI & Data Science"]);
+  const klasseIndustrie2024 = await makeClass("Industrie 2024", industrie.id, 2024, industrieFaecher);
+  const klasseMecha2023 = await makeClass("Mechatronik 2023", mecha.id, 2023, mechaFaecher);
+  const klasseElektro2023 = await makeClass("Elektrotechnik 2023", elektro.id, 2023, elektroFaecher);
+  const klasseElektro2024 = await makeClass("Elektrotechnik 2024", elektro.id, 2024, elektroFaecher);
+
   // --- Benutzer (ein Login pro Rolle, Passwort: demo1234) ---
   await prisma.user.create({ data: { tenantId, email: "admin@demo.de", name: "Anna Schmidt", role: "ADMIN", passwordHash: pw } });
   await prisma.user.create({ data: { tenantId, email: "ausbilder@demo.de", name: "Max Vogt", role: "AUSBILDER", passwordHash: pw } });
@@ -211,22 +271,22 @@ async function main() {
 
   // --- Auszubildende ---
   // Bezugspunkt für "Ausbildungsjahr": Start im September. Heute ~2026 → Start 2023 = 3. Jahr.
-  const lisa = await prisma.apprentice.create({ data: { tenantId, vorname: "Lisa", nachname: "Hoffmann", professionId: fiae.id, start: d("2024-09-01"), ende: d("2027-08-31") } });
-  const tim = await prisma.apprentice.create({ data: { tenantId, vorname: "Tim", nachname: "Wagner", professionId: fiae.id, start: d("2023-09-01"), ende: d("2026-08-31") } });
-  const sophie = await prisma.apprentice.create({ data: { tenantId, vorname: "Sophie", nachname: "Braun", professionId: industrie.id, start: d("2024-09-01"), ende: d("2027-01-31") } });
-  const leon = await prisma.apprentice.create({ data: { tenantId, vorname: "Leon", nachname: "Fischer", professionId: fiae.id, start: d("2025-09-01"), ende: d("2028-08-31"), userId: azubiUser.id } });
+  const lisa = await prisma.apprentice.create({ data: { tenantId, vorname: "Lisa", nachname: "Hoffmann", professionId: fiae.id, classId: klasseFiae2024.id, start: d("2024-09-01"), ende: d("2027-08-31") } });
+  const tim = await prisma.apprentice.create({ data: { tenantId, vorname: "Tim", nachname: "Wagner", professionId: fiae.id, classId: klasseFiae2023.id, start: d("2023-09-01"), ende: d("2026-08-31") } });
+  const sophie = await prisma.apprentice.create({ data: { tenantId, vorname: "Sophie", nachname: "Braun", professionId: industrie.id, classId: klasseIndustrie2024.id, start: d("2024-09-01"), ende: d("2027-01-31") } });
+  const leon = await prisma.apprentice.create({ data: { tenantId, vorname: "Leon", nachname: "Fischer", professionId: fiae.id, classId: klasseFiae2025.id, start: d("2025-09-01"), ende: d("2028-08-31"), userId: azubiUser.id } });
 
-  // Mechatroniker:innen im 3. Ausbildungsjahr (Start 2023)
-  const jonas = await prisma.apprentice.create({ data: { tenantId, vorname: "Jonas", nachname: "Becker", professionId: mecha.id, start: d("2023-09-01"), ende: d("2027-01-31") } });
-  const mia = await prisma.apprentice.create({ data: { tenantId, vorname: "Mia", nachname: "Wolf", professionId: mecha.id, start: d("2023-09-01"), ende: d("2027-01-31") } });
+  // Mechatroniker:innen im 3. Ausbildungsjahr (Start 2023) → Klasse Mechatronik 2023
+  const jonas = await prisma.apprentice.create({ data: { tenantId, vorname: "Jonas", nachname: "Becker", professionId: mecha.id, classId: klasseMecha2023.id, start: d("2023-09-01"), ende: d("2027-01-31") } });
+  const mia = await prisma.apprentice.create({ data: { tenantId, vorname: "Mia", nachname: "Wolf", professionId: mecha.id, classId: klasseMecha2023.id, start: d("2023-09-01"), ende: d("2027-01-31") } });
   await prisma.apprentice.createMany({
     data: [
-      { tenantId, vorname: "Finn", nachname: "Keller", professionId: mecha.id, start: d("2023-09-01"), ende: d("2027-01-31") },
-      { tenantId, vorname: "Emma", nachname: "Richter", professionId: mecha.id, start: d("2023-09-01"), ende: d("2027-01-31") },
-      { tenantId, vorname: "Paul", nachname: "Neumann", professionId: mecha.id, start: d("2023-09-01"), ende: d("2027-01-31") },
+      { tenantId, vorname: "Finn", nachname: "Keller", professionId: mecha.id, classId: klasseMecha2023.id, start: d("2023-09-01"), ende: d("2027-01-31") },
+      { tenantId, vorname: "Emma", nachname: "Richter", professionId: mecha.id, classId: klasseMecha2023.id, start: d("2023-09-01"), ende: d("2027-01-31") },
+      { tenantId, vorname: "Paul", nachname: "Neumann", professionId: mecha.id, classId: klasseMecha2023.id, start: d("2023-09-01"), ende: d("2027-01-31") },
       // Elektroniker:innen zur Abgrenzung
-      { tenantId, vorname: "Ben", nachname: "Schäfer", professionId: elektro.id, start: d("2024-09-01"), ende: d("2028-01-31") },
-      { tenantId, vorname: "Clara", nachname: "Lang", professionId: elektro.id, start: d("2023-09-01"), ende: d("2027-01-31") },
+      { tenantId, vorname: "Ben", nachname: "Schäfer", professionId: elektro.id, classId: klasseElektro2024.id, start: d("2024-09-01"), ende: d("2028-01-31") },
+      { tenantId, vorname: "Clara", nachname: "Lang", professionId: elektro.id, classId: klasseElektro2023.id, start: d("2023-09-01"), ende: d("2027-01-31") },
     ],
   });
 
@@ -276,14 +336,14 @@ async function main() {
     ],
   });
 
-  // --- Berufsschulplan (Blockunterricht) ---
+  // --- Berufsschulplan (Blockunterricht je Klasse) ---
   await prisma.schoolBlock.createMany({
     data: [
-      // Mechatroniker 3. Jahr — Blockwoche im Oktober (überschneidet Jonas' QS-Einsatz).
-      { tenantId, professionId: mecha.id, ausbildungsjahr: 3, von: d("2026-10-12"), bis: d("2026-10-16") },
-      { tenantId, professionId: mecha.id, ausbildungsjahr: 3, von: d("2026-11-23"), bis: d("2026-11-27") },
-      // FIAE alle Jahrgänge — Blockwoche im Juli (überschneidet Lisas IT-Einsatz).
-      { tenantId, professionId: fiae.id, ausbildungsjahr: null, von: d("2026-07-13"), bis: d("2026-07-17") },
+      // Mechatronik 2023 — Blockwochen im Herbst (überschneiden Jonas' QS-Einsatz).
+      { tenantId, classId: klasseMecha2023.id, von: d("2026-10-12"), bis: d("2026-10-16") },
+      { tenantId, classId: klasseMecha2023.id, von: d("2026-11-23"), bis: d("2026-11-27") },
+      // Fachinformatik 2024 — Blockwoche im Juli (überschneidet Lisas IT-Einsatz).
+      { tenantId, classId: klasseFiae2024.id, von: d("2026-07-13"), bis: d("2026-07-17") },
     ],
   });
 
@@ -335,25 +395,27 @@ async function main() {
       { tenantId, apprenticeId: leon.id, departmentId: qs.id, von: d("2026-09-07"), bis: d("2026-11-27") },
     ],
   });
-  // Berufsschulwoche bald + Urlaub im Sommer.
+  // Berufsschulwoche bald (Klasse Fachinformatik 2025) + Urlaub im Sommer.
   await prisma.schoolBlock.create({
-    data: { tenantId, professionId: fiae.id, ausbildungsjahr: null, von: d("2026-06-22"), bis: d("2026-06-26") },
+    data: { tenantId, classId: klasseFiae2025.id, von: d("2026-06-22"), bis: d("2026-06-26") },
   });
   await prisma.absenceBlock.create({
     data: { tenantId, apprenticeId: leon.id, typ: "URLAUB", von: d("2026-08-10"), bis: d("2026-08-21") },
   });
-  // Beispiel-Noten (Berufsschule).
+  // Beispiel-Noten (Fächer aus Leons Klasse Fachinformatik 2025).
   await prisma.grade.createMany({
     data: [
-      { tenantId, apprenticeId: leon.id, fach: "Programmierung", wert: 2.0, datum: d("2026-02-13") },
-      { tenantId, apprenticeId: leon.id, fach: "Datenbanken", wert: 1.7, datum: d("2026-04-17") },
-      { tenantId, apprenticeId: leon.id, fach: "Wirtschaft & Soziales", wert: 2.3, datum: d("2026-03-20") },
+      { tenantId, apprenticeId: leon.id, subjectId: sid("Programmierung"), wert: 2.0, datum: d("2026-02-13") },
+      { tenantId, apprenticeId: leon.id, subjectId: sid("Datenbanken"), wert: 1.7, datum: d("2026-04-17") },
+      { tenantId, apprenticeId: leon.id, subjectId: sid("Wirtschaft & Soziales"), wert: 2.3, datum: d("2026-03-20") },
     ],
   });
 
   const azubiCount = await prisma.apprentice.count({ where: { tenantId } });
   const lcCount = await prisma.learningContent.count({ where: { tenantId } });
-  console.log(`✅ Seed fertig: "${tenant.name}" — ${azubiCount} Azubis, 8 Abteilungen, 4 Berufe, ${lcCount} Lerninhalte.`);
+  const classCount = await prisma.schoolClass.count({ where: { tenantId } });
+  const subjectCount = await prisma.subject.count({ where: { tenantId } });
+  console.log(`✅ Seed fertig: "${tenant.name}" — ${azubiCount} Azubis, 8 Abteilungen, 4 Berufe, ${lcCount} Lerninhalte, ${classCount} Klassen, ${subjectCount} Fächer.`);
   console.log("   Logins — Passwort jeweils: demo1234");
   console.log("   • admin@demo.de  • ausbilder@demo.de  • beauftragter@demo.de  • azubi@demo.de");
 }

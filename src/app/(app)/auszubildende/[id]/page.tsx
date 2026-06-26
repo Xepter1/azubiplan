@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowUpRight, Check, Clock, CircleDashed } from "lucide-reac
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveTenant } from "@/lib/tenant";
+import { setApprenticeClass } from "../actions";
 import {
   ausbildungsdauerJahre,
   ausbildungsjahr,
@@ -60,6 +61,7 @@ export default async function AzubiProfilPage({
         start: true,
         ende: true,
         professionId: true,
+        classId: true,
         profession: { select: { bezeichnung: true } },
         placements: {
           where: { deletedAt: null },
@@ -85,6 +87,19 @@ export default async function AzubiProfilPage({
   ]);
 
   if (!azubi) notFound();
+
+  // Klassen, die zum Beruf des Azubis passen (für die Klassen-Zuordnung).
+  const classes = azubi.professionId
+    ? await prisma.schoolClass.findMany({
+        where: {
+          tenantId: tenant.id,
+          professionId: azubi.professionId,
+          deletedAt: null,
+        },
+        select: { id: true, name: true, jahrgang: true },
+        orderBy: [{ jahrgang: "desc" }, { name: "asc" }],
+      })
+    : [];
 
   const colorOf = departmentColorMap(departments.map((d) => d.id));
 
@@ -226,6 +241,43 @@ export default async function AzubiProfilPage({
               value={`${abgedeckt.length} / ${sollContents.length} abgedeckt`}
             />
           </dl>
+
+          {/* Klasse zuordnen — steuert Fächer (Noten) & Berufsschulwochen */}
+          <form action={setApprenticeClass} className="mt-5 border-t pt-4">
+            <input type="hidden" name="apprenticeId" value={id} />
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Klasse
+            </label>
+            {classes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Klasse für diesen Beruf.{" "}
+                <Link href="/klassen" className="text-primary hover:underline">
+                  Anlegen →
+                </Link>
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  name="classId"
+                  defaultValue={azubi.classId ?? ""}
+                  className="h-9 flex-1 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">— keine —</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  className="h-9 rounded-lg border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+                >
+                  Speichern
+                </button>
+              </div>
+            )}
+          </form>
         </div>
 
         {/* Stationen + Notenspiegel */}

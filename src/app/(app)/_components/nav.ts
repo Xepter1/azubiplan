@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   GraduationCap,
   Briefcase,
+  School,
   Building2,
   CalendarX,
   CircleUser,
@@ -60,6 +61,12 @@ export const navItems: NavItem[] = [
     href: "/berufe",
     label: "Berufe",
     icon: Briefcase,
+    roles: ["ADMIN", "AUSBILDER"],
+  },
+  {
+    href: "/klassen",
+    label: "Klassen",
+    icon: School,
     roles: ["ADMIN", "AUSBILDER"],
   },
   {

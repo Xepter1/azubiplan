@@ -61,7 +61,15 @@ export default async function MeineSeitePage() {
       start: true,
       ende: true,
       professionId: true,
+      classId: true,
       profession: { select: { bezeichnung: true } },
+      class: {
+        select: {
+          classSubjects: {
+            select: { subject: { select: { id: true, name: true } } },
+          },
+        },
+      },
       placements: {
         where: { deletedAt: null },
         select: {
@@ -73,7 +81,12 @@ export default async function MeineSeitePage() {
         },
       },
       grades: {
-        select: { id: true, fach: true, wert: true, datum: true },
+        select: {
+          id: true,
+          wert: true,
+          datum: true,
+          subject: { select: { name: true } },
+        },
         orderBy: { datum: "desc" },
       },
     },
@@ -106,13 +119,12 @@ export default async function MeineSeitePage() {
       },
       orderBy: { name: "asc" },
     }),
-    prisma.schoolBlock.findMany({
-      where: {
-        tenantId: tenant.id,
-        professionId: azubi.professionId ?? undefined,
-      },
-      select: { ausbildungsjahr: true, von: true, bis: true },
-    }),
+    azubi.classId
+      ? prisma.schoolBlock.findMany({
+          where: { tenantId: tenant.id, classId: azubi.classId },
+          select: { von: true, bis: true },
+        })
+      : Promise.resolve([]),
     prisma.absenceBlock.findMany({
       where: { tenantId: tenant.id, apprenticeId: azubi.id },
       select: { typ: true, von: true, bis: true },
@@ -120,9 +132,8 @@ export default async function MeineSeitePage() {
   ]);
 
   const colorOf = departmentColorMap(departments.map((d) => d.id));
-  const mySchool = schoolBlocks.filter(
-    (s) => s.ausbildungsjahr == null || s.ausbildungsjahr === azYear,
-  );
+  // Berufsschulwochen kommen aus der Klasse des Azubis (Jahrgangs-genau).
+  const mySchool = schoolBlocks;
 
   // --- Fortschritt (Stationen des Berufs) ---
   const progress = departments
@@ -256,10 +267,15 @@ export default async function MeineSeitePage() {
 
   const grades = azubi.grades.map((g) => ({
     id: g.id,
-    fach: g.fach,
+    fach: g.subject.name,
     wert: Number(g.wert).toLocaleString("de-DE", { minimumFractionDigits: 1 }),
     datum: dateFmt.format(g.datum),
   }));
+
+  // Fächer der Klasse — Auswahl für das Noten-Dropdown.
+  const subjects = (azubi.class?.classSubjects ?? [])
+    .map((cs) => cs.subject)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <MeineSeite
@@ -275,6 +291,7 @@ export default async function MeineSeitePage() {
       segments={segments}
       upcoming={upcoming.map(({ when: _when, ...rest }) => rest)}
       grades={grades}
+      subjects={subjects}
     />
   );
 }

@@ -28,6 +28,7 @@ type Upcoming = {
   sub: string;
 };
 type Grade = { id: string; fach: string; wert: string; datum: string };
+type Subject = { id: string; name: string };
 type Profile = {
   name: string;
   beruf: string | null;
@@ -58,6 +59,7 @@ export function MeineSeite({
   segments,
   upcoming,
   grades,
+  subjects,
 }: {
   profile: Profile;
   progress: Progress[];
@@ -65,6 +67,7 @@ export function MeineSeite({
   segments: Segment[];
   upcoming: Upcoming[];
   grades: Grade[];
+  subjects: Subject[];
 }) {
   const [tab, setTab] = useState<Tab>("uebersicht");
   const [noteOpen, setNoteOpen] = useState(false);
@@ -154,7 +157,9 @@ export function MeineSeite({
         </div>
       </div>
 
-      {noteOpen && <NoteModal onClose={() => setNoteOpen(false)} />}
+      {noteOpen && (
+        <NoteModal subjects={subjects} onClose={() => setNoteOpen(false)} />
+      )}
     </div>
   );
 }
@@ -409,7 +414,13 @@ function NotenTab({
   );
 }
 
-function NoteModal({ onClose }: { onClose: () => void }) {
+function NoteModal({
+  subjects,
+  onClose,
+}: {
+  subjects: Subject[];
+  onClose: () => void;
+}) {
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const today = new Date().toISOString().slice(0, 10);
@@ -447,18 +458,45 @@ function NoteModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {subjects.length === 0 ? (
+          <div className="space-y-4 p-6">
+            <p className="rounded-lg border border-dashed bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+              In deiner Klasse sind noch keine Fächer hinterlegt — oder du bist
+              noch keiner Klasse zugeordnet. Bitte wende dich an deinen
+              Ausbilder.
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-9 items-center rounded-lg border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        ) : (
         <form action={handleAdd} className="space-y-4 p-6">
           <div className="grid gap-1.5">
-            <label htmlFor="fach" className="text-sm font-medium">
+            <label htmlFor="subject" className="text-sm font-medium">
               Fach
             </label>
-            <input
-              id="fach"
-              name="fach"
+            <select
+              id="subject"
+              name="subjectId"
               required
-              placeholder="z. B. Programmierung"
+              defaultValue=""
               className="h-9 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
+            >
+              <option value="" disabled>
+                Fach wählen …
+              </option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
@@ -512,6 +550,7 @@ function NoteModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

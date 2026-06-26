@@ -20,42 +20,17 @@ function dateRange(formData: FormData) {
 
 // Sicherstellen, dass eine fremd-ID zum Mandanten gehört.
 async function assertOwned(
-  model: "apprentice" | "department" | "profession",
+  model: "apprentice" | "department",
   id: string,
   tenantId: string,
 ) {
-  // @ts-expect-error – dynamischer Modellzugriff, alle drei haben tenantId.
+  // @ts-expect-error – dynamischer Modellzugriff, beide haben tenantId.
   const row = await prisma[model].findFirst({ where: { id, tenantId } });
   if (!row) throw new Error("Datensatz nicht gefunden.");
 }
 
-// --- Berufsschulplan ---
-export async function createSchoolBlock(formData: FormData) {
-  const tenant = await getActiveTenant();
-  const professionId = String(formData.get("professionId") ?? "");
-  if (!professionId) throw new Error("Bitte einen Beruf wählen.");
-  await assertOwned("profession", professionId, tenant.id);
-  const jahrRaw = String(formData.get("ausbildungsjahr") ?? "");
-  const { von, bis } = dateRange(formData);
-
-  await prisma.schoolBlock.create({
-    data: {
-      tenantId: tenant.id,
-      professionId,
-      ausbildungsjahr: jahrRaw ? Number(jahrRaw) : null,
-      von,
-      bis,
-    },
-  });
-  revalidate();
-}
-
-export async function deleteSchoolBlock(formData: FormData) {
-  const tenant = await getActiveTenant();
-  const id = String(formData.get("id") ?? "");
-  await prisma.schoolBlock.deleteMany({ where: { id, tenantId: tenant.id } });
-  revalidate();
-}
+// Hinweis: Der Berufsschulplan wird jetzt je Schulklasse gepflegt (Reiter
+// „Klassen"), da eine Klasse einem Beruf + Jahrgang entspricht.
 
 // --- Abwesenheit (Urlaub / Prüfung) ---
 export async function createAbsence(formData: FormData) {

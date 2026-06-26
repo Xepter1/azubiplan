@@ -23,8 +23,7 @@ export type PlacementLite = {
   bis: string; // ISO
 };
 export type SchoolBlockLite = {
-  professionId: string;
-  ausbildungsjahr: number | null;
+  classId: string;
   von: string;
   bis: string;
 };
@@ -51,7 +50,7 @@ export type RuleContext = {
   absence: AbsenceLite[];
   deptBlocks: DeptBlockLite[];
   apprenticeProfession: Record<string, string | null>;
-  apprenticeYear: Record<string, number>;
+  apprenticeClass: Record<string, string | null>;
   today: string; // ISO – Bezugspunkt für "abgeschlossen"
 };
 
@@ -123,7 +122,7 @@ export function violationsFor(
   const pV = dayKey(p.von);
   const pB = dayKey(p.bis);
   const prof = ctx.apprenticeProfession[p.apprenticeId];
-  const jahr = ctx.apprenticeYear[p.apprenticeId];
+  const azClass = ctx.apprenticeClass[p.apprenticeId];
 
   // Kapazität (Abteilung voll).
   if (overCapacityIds(ctx.placements, dept).has(p.id)) {
@@ -152,14 +151,11 @@ export function violationsFor(
     }
   }
 
-  // Berufsschulwoche (Beruf + ggf. Ausbildungsjahr).
+  // Berufsschulwoche (Klasse des Azubis).
   if (
-    prof &&
+    azClass &&
     ctx.school.some(
-      (s) =>
-        s.professionId === prof &&
-        (s.ausbildungsjahr == null || s.ausbildungsjahr === jahr) &&
-        overlaps(pV, pB, dayKey(s.von), dayKey(s.bis)),
+      (s) => s.classId === azClass && overlaps(pV, pB, dayKey(s.von), dayKey(s.bis)),
     )
   ) {
     out.push({

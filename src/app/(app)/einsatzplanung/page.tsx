@@ -25,6 +25,7 @@ export default async function EinsatzplanungPage() {
         vorname: true,
         nachname: true,
         professionId: true,
+        classId: true,
         start: true,
       },
     }),
@@ -60,7 +61,7 @@ export default async function EinsatzplanungPage() {
     }),
     prisma.schoolBlock.findMany({
       where: { tenantId: tid },
-      select: { professionId: true, ausbildungsjahr: true, von: true, bis: true },
+      select: { classId: true, von: true, bis: true },
     }),
     prisma.absenceBlock.findMany({
       where: { tenantId: tid },
@@ -101,6 +102,7 @@ export default async function EinsatzplanungPage() {
           vorname: a.vorname,
           nachname: a.nachname,
           professionId: a.professionId,
+          classId: a.classId,
           start: a.start.toISOString(),
         }))}
         departments={departments.map((dep) => ({
@@ -120,8 +122,7 @@ export default async function EinsatzplanungPage() {
         }))}
         soll={soll}
         schoolBlocks={schoolBlocks.map((s) => ({
-          professionId: s.professionId,
-          ausbildungsjahr: s.ausbildungsjahr,
+          classId: s.classId,
           von: iso(s.von),
           bis: iso(s.bis),
         }))}

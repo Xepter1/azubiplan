@@ -5,8 +5,10 @@ Unternehmen legen Azubis und Abteilungen an; Azubis rotieren durch Abteilungen, 
 Ausbilder:innen behalten den Überblick, ob alle Pflicht-Lerninhalte abgedeckt sind.
 
 > **Stand:** MVP in Arbeit. Es laufen bereits: Login mit Rollen, App-Shell mit
-> rollenabhängiger Navigation, Azubi-Verwaltung und der visuelle **Einsatzplaner**
-> (Drag & Drop, Ansichten Monat/Woche/Tag).
+> rollenabhängiger Navigation, Azubi-Verwaltung, der visuelle **Einsatzplaner**
+> (Drag & Drop, Ansichten Monat/Woche/Tag), die **Stammdaten-Pflege** (Berufe +
+> Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung) und der **RLP-Abdeckungs-Check**
+> im Azubi-Profil (was ist abgedeckt, was fehlt).
 >
 > Das große Bild (Stack-Entscheidungen, Datenmodell, DSGVO, Roadmap):
 > **[ARCHITECTURE.md](ARCHITECTURE.md)** · Schnell-Kontext für KI-Sitzungen: **[CLAUDE.md](CLAUDE.md)**
@@ -54,7 +56,7 @@ App öffnen: **http://localhost:3000**
 | E-Mail | Rolle | sieht … |
 |---|---|---|
 | `admin@demo.de` | Administrator | alles |
-| `ausbilder@demo.de` | Ausbilder:in | Planung, Azubis, Abteilungen |
+| `ausbilder@demo.de` | Ausbilder:in | Planung, Azubis, Berufe, Abteilungen |
 | `beauftragter@demo.de` | Ausbildungsbeauftragte:r | Beurteilungen, Azubis |
 | `azubi@demo.de` | Auszubildende:r | nur Dashboard + Beurteilungen |
 
@@ -83,9 +85,11 @@ src/
     (app)/               # geschützter Bereich (Sidebar + Topbar)
       _components/        # Sidebar, Topbar, Navigations-Mapping (nav.ts)
       dashboard/          # rollenabhängiges Dashboard
-      auszubildende/      # Azubi-Verwaltung (Liste + Anlegen)
+      auszubildende/      # Azubi-Liste + Profil (Stationen + RLP-Abdeckungs-Cockpit)
+      berufe/             # Berufe + Lerninhalte (Kenntnisse/Fähigkeiten/Fertigkeiten)
+      abteilungen/        # Abteilungen + Lerninhalt-Zuordnung (Drag & Drop)
       einsatzplanung/     # visueller Planer (Drag & Drop) + Server-Actions
-      abteilungen/ benutzer/ beurteilungen/ einstellungen/
+      sperrzeiten/ meine-seite/ benutzer/ beurteilungen/ einstellungen/
     api/auth/            # Auth.js-Endpunkte
   lib/
     prisma.ts            # Prisma-Client (Singleton, @prisma/adapter-pg)

@@ -5,6 +5,56 @@ Format lose angelehnt an [Keep a Changelog](https://keepachangelog.com/de/).
 
 ---
 
+## 2026-06-26 — Berufe & Lerninhalte, Abteilungs-Zuordnung, RLP-Abdeckung
+
+Das **Killer-Feature** aus ARCHITECTURE.md §6 steht: Pflicht-Lerninhalte je Beruf
+pflegen, Abteilungen die vermittelten Inhalte zuordnen und im Azubi-Profil sehen, was
+abgedeckt ist und was fehlt. **Kein Schema-Umbau** — das Datenmodell (`LearningContent`,
+`RequiredContent`, `TaughtContent`) war bereits vorbereitet; neu ist nur die Oberfläche.
+
+### Reiter „Berufe" + Lerninhalte-Verwaltung
+**Was:** Neue Stammdaten-Seite `/berufe` (Rolle Admin/Ausbilder), neuer Nav-Eintrag.
+
+- Liste der Berufe mit Anzahl Lerninhalte; Beruf anlegen + löschen (Soft-Delete).
+- Beruf-Detail (`/berufe/[id]`): Lerninhalte als entfernbare Chips; Freitext-Eingabe mit
+  **„find-or-create"** (gleichnamige Inhalte werden wiederverwendet, nicht doppelt
+  angelegt) und Schnell-Zuordnung bereits vorhandener Inhalte aus anderen Berufen.
+- Rein über Server Actions + `<form>` gelöst (`berufe/actions.ts`), kein Client-JS nötig.
+
+### Abteilungen: anlegen/bearbeiten + Drag-&-Drop-Zuordnung
+**Was:** Die Abteilungsseite war read-only — jetzt anlegen, bearbeiten und zuordnen.
+
+- `/abteilungen`: Abteilung anlegen (Name + Kapazität), Liste verlinkt ins Detail.
+- `/abteilungen/[id]`: Stammdaten bearbeiten + **zweispaltige Lerninhalt-Zuordnung** —
+  links „vermittelt diese Abteilung", rechts „verfügbar" (mit Hinweis, welche Berufe den
+  Inhalt brauchen). **Native HTML5-Drag-&-Drop** (wie der Planer, keine neue Abhängigkeit)
+  plus +/×-Knöpfe; optimistisches Update, Server zieht im Hintergrund nach.
+- Setzt/entfernt `TaughtContent` (Abteilung ↔ Lerninhalt) in `abteilungen/actions.ts`.
+
+### Azubi-Profil: RLP-Abdeckung (Cockpit)
+**Was:** Neuer Abschnitt im Profil (`/auszubildende/[id]`).
+
+- Pro Pflicht-Lerninhalt des Berufs: **abgedeckt** (mit Zeitraum & Abteilung des
+  Einsatzes), **eingeplant** (zukünftiger Einsatz) oder **fehlt** (keine vermittelnde
+  Abteilung in der Rotation). Fortschrittsbalken „X/Y abgedeckt".
+- Status wird automatisch aus den Einsätzen abgeleitet: war/ist der Azubi in einer
+  Abteilung, die den Inhalt vermittelt → abgedeckt. Neuer Helfer `contentCoverage` in
+  `src/lib/ausbildung.ts`. Stammdaten-Panel zeigt zusätzlich „Lerninhalte X/Y abgedeckt".
+
+### Demo-Daten (Seed) erweitert
+- `prisma/seed.ts`: 21 Lerninhalte, je Beruf zugeordnet (`RequiredContent`) und in
+  Abteilungen vermittelt (`TaughtContent`). Geteilte Inhalte (z. B. „Schaltpläne lesen
+  und anwenden" bei Mechatroniker + Elektroniker) entstehen nur einmal.
+- „Projektmanagement" ist bewusst keiner Abteilung zugeordnet → erscheint dauerhaft
+  unter „Fehlt noch" als Demo für die Lückenanzeige.
+
+### Bewusst zurückgestellt
+- Lerninhalt-Typen (Kenntnis/Fähigkeit/Fertigkeit getrennt) — aktuell ein flacher Typ.
+- Soll-Stunden/-Wochen je Lerninhalt — Abdeckung ist aktuell binär (ja/nein).
+- Beruf umbenennen; Rollenprüfung in den Actions (bislang nur Tenant-Filter, wie Bestand).
+
+---
+
 ## 2026-06-23 — Azubi-Ansicht, Einsatzplaner-Regeln, Branding
 
 Großer Funktions-Batch. Reihenfolge entspricht den Commits.

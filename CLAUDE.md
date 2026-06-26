@@ -27,20 +27,28 @@ rollenabhängigem Dashboard, **Login** (Auth.js v5, E-Mail + Passwort; Session t
 (Logo/Bildmarke/Favicon). Navigations-Mapping (Rolle → Reiter):
 `src/app/(app)/_components/nav.ts`. Setup/Onboarding: **[README.md](README.md)**.
 
-Funktionsbereiche (Stand 2026-06-23, Details: **[CHANGELOG.md](CHANGELOG.md)**):
+Funktionsbereiche (Stand 2026-06-26, Details: **[CHANGELOG.md](CHANGELOG.md)**):
 - **Einsatzplaner** (`einsatzplanung/`): Drag & Drop, Ansichten Monat/Woche/Tag,
   Abteilungsfarben + Eignung je Beruf (`DepartmentProfession`). **Regel-Engine**
   (`src/lib/planner-rules.ts`): „!" am Block bei Verstoß (Abteilung voll, Berufsschule,
   Urlaub/Prüfung, gesperrt, Station durchlaufen) — alles überschreibbar.
+- **Stammdaten** (`berufe/`, `abteilungen/`): Berufe anlegen + je Beruf Lerninhalte
+  (Kenntnisse/Fähigkeiten/Fertigkeiten) pflegen (`RequiredContent`). Abteilungen anlegen/
+  bearbeiten und ihnen Lerninhalte **per Drag & Drop** zuordnen (`TaughtContent`). Modelle
+  `LearningContent`/`RequiredContent`/`TaughtContent` lagen schon, nur die UI ist neu.
 - **Ausbilder-Ansicht**: Azubi-Liste (Suche/Filter/Sortierung) + Azubi-Profil mit
-  Stationsbalken (voll/transparent/leer) und Bewertungen. Helfer: `src/lib/ausbildung.ts`.
+  Stationsbalken (voll/transparent/leer), Bewertungen und **RLP-Abdeckungs-Cockpit**
+  (je Pflicht-Lerninhalt: abgedeckt mit Zeitraum & Abteilung / eingeplant / fehlt —
+  abgeleitet aus den Einsätzen). Helfer: `src/lib/ausbildung.ts` (`contentCoverage`).
 - **Azubi-Ansicht** (`meine-seite/`): Wochen-Zeitleiste, Fortschritt, Anstehendes,
   **Noten** anlegen/auflisten (Modell `Grade`).
 - **Verwaltung** `/sperrzeiten` (Admin/Ausbilder): Berufsschulplan, Urlaub/Prüfung,
   Abteilungssperren. Neue Modelle: `SchoolBlock`, `AbsenceBlock`, `DepartmentBlock`.
 
 Bewusst zurückgestellt: Ausbilder-Zuteilung („nur meine Azubis"), Zeugnis-Upload,
-„Urlaub beantragen", Benachrichtigungen bei Noteneingabe.
+„Urlaub beantragen", Benachrichtigungen bei Noteneingabe. Bei den Lerninhalten:
+Typen (Kenntnis/Fähigkeit/Fertigkeit) noch nicht getrennt, Abdeckung binär (keine
+Soll-Stunden je Inhalt), Beruf umbenennen fehlt.
 
 Nächste Schritte: **Row-Level-Security** in PostgreSQL (DB-tiefe Mandantentrennung als
 Absicherung *unter* der App-Schicht), danach Beurteilung & echte Noten-Auswertung. Offene

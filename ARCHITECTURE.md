@@ -1,7 +1,7 @@
 # AzubiPlan — Architektur
 
 > Verwaltungssoftware für Auszubildende (mandantenfähige B2B-SaaS).
-> Stand: 2026-06-19 · Status: **MVP in Arbeit** — Gerüst + erste Features stehen.
+> Stand: 2026-06-26 · Status: **MVP in Arbeit** — Gerüst + erste Features stehen.
 
 Dieses Dokument hält die Architektur- und Technologie-Entscheidungen fest (das „Warum").
 Lokales Setup & Onboarding: **[README.md](README.md)** · aktueller Umsetzungsstand:
@@ -162,6 +162,11 @@ erDiagram
 werden, werden gegen die Pflicht-Inhalte seines Berufs (`REQUIRED_CONTENT`) abgeglichen.
 Was fehlt, ist die **Lücke**, die der Ausbilder schließen muss.
 
+> **✓ Umgesetzt (2026-06-26):** Diese Logik läuft als „RLP-Abdeckungs-Cockpit" im
+> Azubi-Profil (Helfer `contentCoverage` in `src/lib/ausbildung.ts`). Gepflegt werden
+> die Verknüpfungen über die Reiter **Berufe** (`REQUIRED_CONTENT`) und **Abteilungen**
+> (`TAUGHT_CONTENT`, Zuordnung per Drag & Drop).
+
 > Hinweis: `REQUIRED_CONTENT` und `TAUGHT_CONTENT` sind Verknüpfungstabellen
 > (Beruf ↔ Lerninhalt bzw. Abteilung ↔ Lerninhalt).
 
@@ -217,11 +222,14 @@ Wir sind rechtlich **Auftragsverarbeiter** für unsere Kunden.
 ## 10. Umsetzungsstand & nächste Schritte
 
 Das Prisma-Schema (Abschnitt 6) ist umgesetzt und migriert. Es laufen: **Login mit
-Rollen**, App-Shell mit rollenabhängiger Navigation, **Azubi-Verwaltung** und der
-visuelle **Einsatzplaner** (Drag & Drop, Ansichten Monat/Woche/Tag, Abteilungs-Eignung
-je Beruf). Stand im Detail: **[README.md](README.md)** / **[CLAUDE.md](CLAUDE.md)**.
+Rollen**, App-Shell mit rollenabhängiger Navigation, **Azubi-Verwaltung**, der visuelle
+**Einsatzplaner** (Drag & Drop, Ansichten Monat/Woche/Tag, Abteilungs-Eignung je Beruf),
+die **Stammdaten-Pflege** (Berufe + Lerninhalte, Abteilungen mit Drag-&-Drop-Zuordnung)
+und der **Abdeckungs-Check** als RLP-Cockpit im Azubi-Profil. Stand im Detail:
+**[README.md](README.md)** / **[CLAUDE.md](CLAUDE.md)**.
 
 Nächste Bausteine:
 1. **Row-Level-Security** in PostgreSQL — DB-tiefe Mandantentrennung *unter* der App-Schicht.
-2. **Abdeckungs-Check** — Lückenanzeige der Pflicht-Lerninhalte (das Killer-Feature).
-3. **Beurteilungen & Noten**, danach Stammdaten-Pflege (Abteilungen/Berufe/Lerninhalte) per UI.
+2. **Beurteilungen & Noten** ausbauen — echte Auswertung statt Platzhalter-Notenspiegel.
+3. Lerninhalte verfeinern: Typen (Kenntnis/Fähigkeit/Fertigkeit), Soll-Stunden je Inhalt
+   und **Rahmenplan-Vorlagen** je Beruf seeden (vgl. §8 Punkt 5).

@@ -325,14 +325,47 @@ async function main() {
     ],
   });
 
+  // Demo für die Ausbildungsbeauftragten-Ansicht (Abteilung Mechanische Fertigung):
+  // eine beendete Station ohne Bewertung (offener Bogen → "Bewerten") + eine anstehende.
+  const moreMecha = await prisma.apprentice.findMany({
+    where: { tenantId, professionId: mecha.id, id: { notIn: [jonas.id, mia.id] } },
+    orderBy: { vorname: "asc" },
+    take: 1,
+  });
+  await prisma.placement.createMany({
+    data: [
+      { tenantId, apprenticeId: mia.id, departmentId: fertigung.id, von: d("2026-02-02"), bis: d("2026-04-24") },
+      ...(moreMecha[0]
+        ? [{ tenantId, apprenticeId: moreMecha[0].id, departmentId: fertigung.id, von: d("2026-09-07"), bis: d("2026-11-27") }]
+        : []),
+    ],
+  });
+
   // --- Beurteilungen auf abgeschlossene Einsätze ---
   const beauftragter = await prisma.user.findFirst({ where: { tenantId, email: "beauftragter@demo.de" } });
+  const ev = (
+    placementId: string,
+    bewertung: number,
+    stars: [number, number, number, number],
+    kommentar: string,
+  ) => ({
+    tenantId,
+    placementId,
+    bewertung,
+    fachlich: stars[0],
+    selbststaendigkeit: stars[1],
+    sorgfalt: stars[2],
+    teamverhalten: stars[3],
+    kommentar,
+    submittedAt: d("2026-06-02"),
+    evaluatorUserId: beauftragter?.id ?? null,
+  });
   await prisma.evaluation.createMany({
     data: [
-      { tenantId, placementId: timAbgeschlossen.id, bewertung: 2, kommentar: "Sehr engagiert, schnelle Auffassungsgabe.", evaluatorUserId: beauftragter?.id ?? null },
-      { tenantId, placementId: lisaSwe.id, bewertung: 2, kommentar: "Solide Einarbeitung, sauberer Code.", evaluatorUserId: beauftragter?.id ?? null },
-      { tenantId, placementId: jonasMontage.id, bewertung: 1, kommentar: "Hervorragende handwerkliche Präzision.", evaluatorUserId: beauftragter?.id ?? null },
-      { tenantId, placementId: jonasElektro.id, bewertung: 3, kommentar: "Gute Fortschritte, Dokumentation ausbaufähig.", evaluatorUserId: beauftragter?.id ?? null },
+      ev(timAbgeschlossen.id, 2, [4, 4, 4, 5], "Sehr engagiert, schnelle Auffassungsgabe."),
+      ev(lisaSwe.id, 2, [4, 4, 3, 4], "Solide Einarbeitung, sauberer Code."),
+      ev(jonasMontage.id, 1, [5, 5, 4, 5], "Hervorragende handwerkliche Präzision."),
+      ev(jonasElektro.id, 3, [3, 3, 3, 4], "Gute Fortschritte, Dokumentation ausbaufähig."),
     ],
   });
 

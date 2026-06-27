@@ -40,6 +40,12 @@ export const navItems: NavItem[] = [
     roles: ["AZUBI"],
   },
   {
+    href: "/meine-abteilung",
+    label: "Meine Abteilung",
+    icon: Building2,
+    roles: ["AUSBILDUNGSBEAUFTRAGTER"],
+  },
+  {
     href: "/einsatzplanung",
     label: "Einsatzplanung",
     icon: CalendarDays,
@@ -55,7 +61,7 @@ export const navItems: NavItem[] = [
     href: "/auszubildende",
     label: "Auszubildende",
     icon: GraduationCap,
-    roles: ["ADMIN", "AUSBILDER", "AUSBILDUNGSBEAUFTRAGTER"],
+    roles: ["ADMIN", "AUSBILDER"],
   },
   {
     href: "/berufe",

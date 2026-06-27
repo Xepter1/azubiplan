@@ -5,6 +5,40 @@ Format lose angelehnt an [Keep a Changelog](https://keepachangelog.com/de/).
 
 ---
 
+## 2026-06-27 — Ausbildungsbeauftragten-Ansicht „Meine Abteilung"
+
+Eigene Ansicht für Ausbildungsbeauftragte: wer gerade in der Abteilung ist/ansteht,
+Bewertungsbögen für beendete Stationen und Sperrzeiten für die eigene Abteilung.
+
+### Datenmodell
+- `Evaluation` um die vier Bewertungskriterien erweitert (`fachlich`,
+  `selbststaendigkeit`, `sorgfalt`, `teamverhalten`, je 1–5 Sterne, 5 = beste) plus
+  `submittedAt` (null = Entwurf, gesetzt = abgeschickt). `bewertung` (1–6, 1 = beste)
+  wird beim Abschicken aus den Sternen abgeleitet und speist das Azubi-Profil.
+- Migration `20260627074541_evaluation_bogen`.
+
+### Reiter „Meine Abteilung" (Rolle Ausbildungsbeauftragte:r)
+- Route `/meine-abteilung`; Abteilung kommt aus `User.departmentId`.
+- Kalenderstrahl mit Umschaltung **Tag / Woche / Monat** (Spalten clientseitig gebaut).
+- Azubi-Liste mit Status: läuft / Station beendet → „Bewerten" / geplant / bewertet.
+- Bewertungsbogen (4 Sterne-Kriterien + Bemerkung) mit **Zwischenspeichern** (Entwurf)
+  und **Abschicken**; abgeschickt erscheint die Note im Azubi-Profil.
+- Button **„Sperrzeit hinzufügen"** legt einen `DepartmentBlock` für die eigene
+  Abteilung an — sichtbar auch unter `/sperrzeiten` (Admin/Ausbilder).
+- Kein Dashboard (bewusst weggelassen). Der Reiter „Auszubildende" wurde dem
+  Beauftragten entzogen — er sieht Azubis nur noch über seine Abteilung.
+
+### Seed
+- Demo-Einsätze in der Mechanischen Fertigung (läuft / beendet / anstehend) und
+  bestehende Bewertungen als „abgeschickt" markiert (inkl. Sterne-Kriterien).
+
+### Bewusst zurückgestellt
+- Benachrichtigung von Azubi + Ausbilder beim Abschicken (TODO in `actions.ts`).
+- Anzeige aller vier Einzelkriterien im Azubi-Profil (zeigt weiter die Gesamt-Note).
+- Harte serverseitige Rollensperre je Route (aktuell Nav-basiert; kommt mit RLS).
+
+---
+
 ## 2026-06-26 — Schulklassen, Fächer & klassenbasierte Noten/Berufsschule
 
 Klassen (= Beruf + Jahrgang) als neue Klammer: Sie bündeln die **Fächer** (für die Noten)

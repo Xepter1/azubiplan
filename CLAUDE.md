@@ -27,7 +27,7 @@ rollenabhängigem Dashboard, **Login** (Auth.js v5, E-Mail + Passwort; Session t
 (Logo/Bildmarke/Favicon). Navigations-Mapping (Rolle → Reiter):
 `src/app/(app)/_components/nav.ts`. Setup/Onboarding: **[README.md](README.md)**.
 
-Funktionsbereiche (Stand 2026-06-26, Details: **[CHANGELOG.md](CHANGELOG.md)**):
+Funktionsbereiche (Stand 2026-06-27, Details: **[CHANGELOG.md](CHANGELOG.md)**):
 - **Einsatzplaner** (`einsatzplanung/`): Drag & Drop, Ansichten Monat/Woche/Tag,
   Abteilungsfarben + Eignung je Beruf (`DepartmentProfession`). **Regel-Engine**
   (`src/lib/planner-rules.ts`): „!" am Block bei Verstoß (Abteilung voll, Berufsschule,
@@ -46,6 +46,10 @@ Funktionsbereiche (Stand 2026-06-26, Details: **[CHANGELOG.md](CHANGELOG.md)**):
   abgeleitet aus den Einsätzen). Helfer: `src/lib/ausbildung.ts` (`contentCoverage`).
 - **Azubi-Ansicht** (`meine-seite/`): Wochen-Zeitleiste, Fortschritt, Anstehendes,
   **Noten** — der Azubi wählt nur aus den **Fächern seiner Klasse** (`Grade.subjectId`).
+- **Beauftragten-Ansicht** (`meine-abteilung/`): nur die eigene Abteilung
+  (`User.departmentId`) — Kalenderstrahl (Tag/Woche/Monat), Azubi-Liste und
+  **Bewertungsbögen** (4 Sterne-Kriterien am `Evaluation`-Modell, Entwurf/Abschicken)
+  für beendete Stationen; „Sperrzeit hinzufügen" legt `DepartmentBlock` an.
 - **Verwaltung** `/sperrzeiten` (Admin/Ausbilder): Urlaub/Prüfung + Abteilungssperren
   (`AbsenceBlock`, `DepartmentBlock`). Der Berufsschulplan ist zu den **Klassen** gezogen.
 

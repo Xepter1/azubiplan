@@ -258,9 +258,19 @@ model Evaluation {
   placementId String    @unique @db.Uuid
   placement   Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
 
-  // TODO (klären): genaues Beurteilungs-Modell (Skala? Kriterien-Katalog? Freitext?).
-  bewertung Int? // Platzhalter, z.B. 1–5
-  kommentar String?
+  // Bewertungsbogen — 4 feste Kriterien, je 1–5 Sterne (5 = beste).
+  fachlich           Int?
+  selbststaendigkeit Int?
+  sorgfalt           Int?
+  teamverhalten      Int?
+  kommentar          String?
+
+  // Gesamt-Note (1–6, 1 = beste) — beim Abschicken aus den Sternen abgeleitet,
+  // fürs Azubi-Profil ("Bewertung · gut").
+  bewertung Int?
+
+  // null = Entwurf (zwischengespeichert); gesetzt = abgeschickt.
+  submittedAt DateTime?
 
   evaluatorUserId String? @db.Uuid
   evaluator       User?   @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id], onDelete: SetNull)

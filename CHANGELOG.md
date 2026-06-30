@@ -5,6 +5,42 @@ Format lose angelehnt an [Keep a Changelog](https://keepachangelog.com/de/).
 
 ---
 
+## 2026-06-30 — Azubi-Ansicht in 3 Reiter geteilt + Profil/Notenspiegel
+
+Die Azubi-Ansicht „Meine Seite" wurde durch **drei eigene Sidebar-Punkte** ersetzt;
+das Profil ist jetzt eine gemeinsame Komponente für Ausbilder und Azubi.
+
+### Azubi: Mein Profil / Kalender / Noten
+- `/meine-seite` entfernt. Neue Punkte (nur Rolle AZUBI): **Mein Profil**
+  (`/mein-profil`), **Kalender** (`/mein-kalender`), **Noten** (`/meine-noten`).
+- Azubi hat kein Dashboard/keine Beurteilungen mehr in der Sidebar; Login landet
+  per Redirect auf `/mein-profil`.
+- **Mein Profil** nutzt dieselbe Komponente wie das Ausbilder-Profil
+  (`auszubildende/azubi-profil-view.tsx`, `AzubiProfilView`) — read-only (Klasse
+  nur lesbar). Beide Profilseiten sind jetzt dünne Wrapper.
+- **Kalender**: Zeitleiste mit Umschaltung **Tag/Woche/Monat** (Spalten
+  clientseitig), Einsätze + Berufsschule/Urlaub/Prüfung; darunter „Mein Urlaub"
+  (statt Sperrzeiten) + deaktivierter „Urlaub beantragen".
+- **Noten**: eigene Seite, Liste + Ø + „+ Note / Zeugnis" (Fach-Dropdown der
+  Klasse; Zeugnis-Upload weiterhin als Hinweis „folgt"). Speichern aktualisiert
+  auch den Ø im Profil.
+
+### Notenspiegel im Profil = echte Durchschnitte
+- Statt Platzhalter (Fachtheorie/Praxis/WiSo) jetzt **Ø gesamt + je Fach** aus den
+  echten Noten. Gilt für Ausbilder- UND Azubi-Profil.
+
+### Beauftragter ohne Dashboard
+- Auch der Ausbildungsbeauftragte hat kein Dashboard mehr (Redirect auf
+  `/meine-abteilung`). Zweiter zu-bewertender Azubi in der Mechanischen Fertigung
+  ergänzt; Bewertung für Leons abgeschlossene Station, damit „Bewertung · gut"
+  im Profil neben dem vollen Balken erscheint.
+
+### Bewusst zurückgestellt
+- Zeugnis-Datei-Upload, „Urlaub beantragen", Ausbilder-Benachrichtigung bei Noten,
+  harte serverseitige Rollensperre je Route (weiterhin Nav-basiert).
+
+---
+
 ## 2026-06-27 — Ausbildungsbeauftragten-Ansicht „Meine Abteilung"
 
 Eigene Ansicht für Ausbildungsbeauftragte: wer gerade in der Abteilung ist/ansteht,

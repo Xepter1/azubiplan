@@ -16,8 +16,12 @@ async function getOwnApprentice() {
   return { azubi, tenantId: tenant.id };
 }
 
-// Note hinzufügen (vom Azubi auf seiner eigenen Seite). Das Fach muss zu seiner
-// Klasse gehören — er kann nur Fächer benoten, die der Ausbilder ihm zugewiesen hat.
+function revalidate() {
+  revalidatePath("/meine-noten");
+  revalidatePath("/mein-profil"); // Ø-Noten im Profil aktualisieren
+}
+
+// Note hinzufügen (vom Azubi). Das Fach muss zu seiner Klasse gehören.
 export async function addGrade(formData: FormData) {
   const { azubi, tenantId } = await getOwnApprentice();
 
@@ -32,13 +36,11 @@ export async function addGrade(formData: FormData) {
   if (Number.isNaN(wert) || wert < 1 || wert > 6) {
     throw new Error("Die Note muss zwischen 1,0 und 6,0 liegen.");
   }
-
   if (!azubi.classId) {
     throw new Error(
       "Dir ist noch keine Klasse zugeordnet. Bitte wende dich an deinen Ausbilder.",
     );
   }
-  // Das Fach muss in der Klasse des Azubis unterrichtet werden.
   const erlaubt = await prisma.classSubject.findFirst({
     where: { tenantId, classId: azubi.classId, subjectId },
     select: { id: true },
@@ -51,7 +53,7 @@ export async function addGrade(formData: FormData) {
     data: { tenantId, apprenticeId: azubi.id, subjectId, wert, datum: new Date(datum) },
   });
   // TODO (später): Ausbilder über neue/​geänderte Note benachrichtigen.
-  revalidatePath("/meine-seite");
+  revalidate();
 }
 
 // Note löschen (nur eigene).
@@ -61,5 +63,5 @@ export async function deleteGrade(formData: FormData) {
   await prisma.grade.deleteMany({
     where: { id, tenantId, apprenticeId: azubi.id },
   });
-  revalidatePath("/meine-seite");
+  revalidate();
 }

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import {
   GraduationCap,
   Building2,
@@ -23,6 +24,13 @@ const dateFmt = new Intl.DateTimeFormat("de-DE");
 
 export default async function DashboardPage() {
   const session = await requireSession();
+  // Beauftragte und Azubis haben kein Dashboard → direkt auf ihre Startseite.
+  if (session.user.role === "AUSBILDUNGSBEAUFTRAGTER") {
+    redirect("/meine-abteilung");
+  }
+  if (session.user.role === "AZUBI") {
+    redirect("/mein-profil");
+  }
   const tenant = await getActiveTenant();
   const role = session.user.role;
   const firstName = (session.user.name ?? "Nutzer").split(" ")[0];

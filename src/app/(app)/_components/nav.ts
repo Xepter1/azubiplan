@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarX,
   CircleUser,
+  ClipboardList,
   Users,
   Settings,
 } from "lucide-react";
@@ -22,21 +23,31 @@ export type NavItem = {
   roles: UserRole[];
 };
 
-const ALL: UserRole[] = [
-  "ADMIN",
-  "AUSBILDER",
-  "AUSBILDUNGSBEAUFTRAGTER",
-  "AZUBI",
-];
-
 // Navigation. Welche Einträge ein Nutzer sieht, ergibt sich aus `roles`.
-// Admin sieht alles; Azubi nur Dashboard + Beurteilungen.
+// Admin sieht alles; Azubi nur Mein Profil / Kalender / Noten.
 export const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
   {
-    href: "/meine-seite",
-    label: "Meine Seite",
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["ADMIN", "AUSBILDER"],
+  },
+  {
+    href: "/mein-profil",
+    label: "Mein Profil",
     icon: CircleUser,
+    roles: ["AZUBI"],
+  },
+  {
+    href: "/mein-kalender",
+    label: "Kalender",
+    icon: CalendarDays,
+    roles: ["AZUBI"],
+  },
+  {
+    href: "/meine-noten",
+    label: "Noten",
+    icon: ClipboardList,
     roles: ["AZUBI"],
   },
   {
@@ -55,7 +66,7 @@ export const navItems: NavItem[] = [
     href: "/beurteilungen",
     label: "Beurteilungen",
     icon: ClipboardCheck,
-    roles: ALL,
+    roles: ["ADMIN", "AUSBILDER", "AUSBILDUNGSBEAUFTRAGTER"],
   },
   {
     href: "/auszubildende",

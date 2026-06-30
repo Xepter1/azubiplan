@@ -326,17 +326,23 @@ async function main() {
   });
 
   // Demo für die Ausbildungsbeauftragten-Ansicht (Abteilung Mechanische Fertigung):
-  // eine beendete Station ohne Bewertung (offener Bogen → "Bewerten") + eine anstehende.
+  // ZWEI beendete Stationen ohne Bewertung (offene Bögen → "Bewerten") + eine anstehende.
   const moreMecha = await prisma.apprentice.findMany({
     where: { tenantId, professionId: mecha.id, id: { notIn: [jonas.id, mia.id] } },
     orderBy: { vorname: "asc" },
-    take: 1,
+    take: 2,
   });
   await prisma.placement.createMany({
     data: [
+      // Mia: beendete Station ohne Bewertung → offener Bogen.
       { tenantId, apprenticeId: mia.id, departmentId: fertigung.id, von: d("2026-02-02"), bis: d("2026-04-24") },
+      // anstehend.
       ...(moreMecha[0]
         ? [{ tenantId, apprenticeId: moreMecha[0].id, departmentId: fertigung.id, von: d("2026-09-07"), bis: d("2026-11-27") }]
+        : []),
+      // zweite beendete Station ohne Bewertung → zweiter offener Bogen zum Ausprobieren.
+      ...(moreMecha[1]
+        ? [{ tenantId, apprenticeId: moreMecha[1].id, departmentId: fertigung.id, von: d("2025-11-03"), bis: d("2026-01-30") }]
         : []),
     ],
   });
@@ -420,13 +426,19 @@ async function main() {
   });
 
   // --- Demo-Daten für den Azubi-Login (Leon Fischer, azubi@demo.de) ---
-  // Drei Stationen: Softwareentwicklung erledigt, IT läuft, QS geplant.
+  // Drei Stationen: Softwareentwicklung erledigt (mit Bewertung), IT läuft, QS geplant.
+  const leonSwe = await prisma.placement.create({
+    data: { tenantId, apprenticeId: leon.id, departmentId: swe.id, von: d("2026-01-05"), bis: d("2026-04-24") },
+  });
   await prisma.placement.createMany({
     data: [
-      { tenantId, apprenticeId: leon.id, departmentId: swe.id, von: d("2026-01-05"), bis: d("2026-04-24") },
       { tenantId, apprenticeId: leon.id, departmentId: itsys.id, von: d("2026-05-04"), bis: d("2026-07-31") },
       { tenantId, apprenticeId: leon.id, departmentId: qs.id, von: d("2026-09-07"), bis: d("2026-11-27") },
     ],
+  });
+  // Abgeschickte Bewertung für die abgeschlossene Station → "Bewertung · gut" im Profil.
+  await prisma.evaluation.create({
+    data: ev(leonSwe.id, 2, [4, 5, 4, 4], "Gute Einarbeitung, sauberer Code."),
   });
   // Berufsschulwoche bald (Klasse Fachinformatik 2025) + Urlaub im Sommer.
   await prisma.schoolBlock.create({
